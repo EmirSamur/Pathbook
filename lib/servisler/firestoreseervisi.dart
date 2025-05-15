@@ -8,12 +8,11 @@ class FirestoreServisi {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _kullanicilarKoleksiyonu = "kullanicilar";
   final String _gonderilerKoleksiyonu = "gonderiler";
-  final String _dosyalarKoleksiyonu = "dosyalar"; // Dosyalar/Panolar için koleksiyon adı
+  final String _dosyalarKoleksiyonu = "dosyalar";
   final String _begenilerAltKoleksiyonu = "begenenKullanicilar";
   final String _yorumlarAltKoleksiyonu = "yorumlar";
 
-  // --- KULLANICI İŞLEMLERİ ---
-
+  // --- KULLANICI İŞLEMLERİ --- (Mevcut haliyle kalabilir)
   Future<void> kullaniciOlustur({
     required String id,
     required String email,
@@ -51,7 +50,6 @@ class FirestoreServisi {
       DocumentSnapshot<Map<String, dynamic>> doc =
       await _firestore.collection(_kullanicilarKoleksiyonu).doc(id).get();
       if (doc.exists) {
-        // Kullanici modelinizin dokumandanUret metodunun Map<String, dynamic> aldığından emin olun
         return Kullanici.dokumandanUret(doc);
       } else {
         print("Firestore: Kullanıcı bulunamadı (ID: $id)");
@@ -88,29 +86,43 @@ class FirestoreServisi {
     }
   }
 
+
   // --- GÖNDERİ İŞLEMLERİ ---
 
   Future<void> gonderiOlustur({
     required String yayinlayanId,
-    required String gonderiResmiUrl,
+    // required String gonderiResmiUrl, // ESKİ: Tek resim URL'i
+    required List<String> gonderiResmiUrls, // YENİ: Resim URL listesi
     required String aciklama,
+    required String kategori, // YENİ: Kategori bilgisi
     String? konum,
   }) async {
     if (yayinlayanId.isEmpty) {
       print("Firestore Hatası (gonderiOlustur): Yayınlayan ID'si boş olamaz.");
       throw ArgumentError("Yayınlayan ID'si boş olamaz.");
     }
+    if (gonderiResmiUrls.isEmpty) {
+      print("Firestore Hatası (gonderiOlustur): Gönderi resmi URL listesi boş olamaz.");
+      throw ArgumentError("Gönderi resmi URL listesi boş olamaz.");
+    }
+    if (kategori.isEmpty) {
+      print("Firestore Hatası (gonderiOlustur): Kategori boş olamaz.");
+      throw ArgumentError("Kategori boş olamaz.");
+    }
+
     try {
       await _firestore.collection(_gonderilerKoleksiyonu).add({
         "kullaniciId": yayinlayanId,
-        "resimUrl": gonderiResmiUrl,
+        // "resimUrl": gonderiResmiUrl, // ESKİ
+        "resimUrls": gonderiResmiUrls, // YENİ
         "aciklama": aciklama,
         "konum": konum ?? "",
+        "kategori": kategori, // YENİ
         "begeniSayisi": 0,
         "yorumSayisi": 0,
         "olusturulmaZamani": FieldValue.serverTimestamp(),
       });
-      print("Firestore: Gönderi başarıyla oluşturuldu.");
+      print("Firestore: Gönderi başarıyla oluşturuldu (Resimler: ${gonderiResmiUrls.length}, Kategori: $kategori).");
 
       DocumentReference kullaniciRef = _firestore.collection(_kullanicilarKoleksiyonu).doc(yayinlayanId);
       await kullaniciRef.update({
@@ -128,11 +140,19 @@ class FirestoreServisi {
     }
   }
 
+  // --- Diğer metodlar (kullaniciGonderileriniGetir, tumGonderileriGetir vb.) ---
+  // Bu metodları da yeni `resimUrls` ve `kategori` alanlarını kullanacak şekilde
+  // Gonderi modelinizle uyumlu olarak güncellemeniz gerekecektir.
+  // Özellikle `Gonderi.dokumandanUret` metodunun bu yeni alanları işlemesi önemlidir.
+  // Örnek olarak tumGonderileriGetir'i bırakıyorum, ancak Gonderi modelinin
+  // `List<String> resimUrls` ve `String kategori` alanlarını beklediğini varsayıyorum.
+
   Stream<QuerySnapshot<Map<String, dynamic>>> kullaniciGonderileriniGetir(String kullaniciId) {
     if (kullaniciId.isEmpty) {
       print("Firestore Hatası (kullaniciGonderileriniGetir): Kullanıcı ID'si boş olamaz.");
       return Stream.empty();
     }
+    // Kategoriye göre filtreleme eklemek isterseniz buraya .where('kategori', isEqualTo: 'Doğa') gibi eklemeler yapabilirsiniz.
     return _firestore
         .collection(_gonderilerKoleksiyonu)
         .where('kullaniciId', isEqualTo: kullaniciId)
@@ -149,11 +169,14 @@ class FirestoreServisi {
     if (sonGorunenGonderi != null) {
       sorgu = sorgu.startAfterDocument(sonGorunenGonderi);
     }
+    // Bu sorgu tüm gönderileri getirir. Anasayfada veya arama sonuçlarında
+    // Gonderi modelinizin `resimUrls` listesinden örneğin ilk resmi göstermeyi
+    // veya bir carousel ile tüm resimleri göstermeyi tercih edebilirsiniz.
+    // Kategoriye göre filtreleme için ARA sayfasında bu sorguya .where clause eklenecektir.
     return sorgu.snapshots();
   }
 
-  // --- BEĞENİ İŞLEMLERİ ---
-
+  // --- BEĞENİ İŞLEMLERİ --- (Mevcut haliyle kalabilir)
   Future<bool> kullaniciGonderiyiBegendiMi({
     required String gonderiId,
     required String aktifKullaniciId,
@@ -206,8 +229,7 @@ class FirestoreServisi {
     }
   }
 
-  // --- YORUM İŞLEMLERİ ---
-
+  // --- YORUM İŞLEMLERİ --- (Mevcut haliyle kalabilir)
   Future<void> yorumEkle({
     required String aktifKullaniciId,
     required String gonderiId,
@@ -258,75 +280,55 @@ class FirestoreServisi {
     });
   }
 
-  // --- YENİ: DOSYA (PANO) İŞLEMLERİ ---
+
+  // --- DOSYA (PANO) İŞLEMLERİ --- (Mevcut haliyle kalabilir, bu istekle doğrudan ilgili değil)
   Stream<List<DosyaModeli>> tumDosyalariGetir({DocumentSnapshot? sonGorunenDosya, int limit = 12}) {
-    // Firestore'daki koleksiyon adınızın '_dosyalarKoleksiyonu' ile eşleştiğinden emin olun.
     Query<Map<String, dynamic>> sorgu = _firestore
-        .collection(_dosyalarKoleksiyonu) // Değişkeni kullan
-        .orderBy('sonGuncelleme', descending: true); // Örnek sıralama
+        .collection(_dosyalarKoleksiyonu)
+        .orderBy('sonGuncelleme', descending: true);
 
     if (sonGorunenDosya != null) {
       sorgu = sorgu.startAfterDocument(sonGorunenDosya);
     }
-
     sorgu = sorgu.limit(limit);
 
     return sorgu.snapshots().map((snapshot) {
       if (snapshot.docs.isEmpty) {
-        print("Firestore (tumDosyalariGetir): Hiç dosya bulunamadı.");
-        return <DosyaModeli>[]; // Boş liste döndür
+        return <DosyaModeli>[];
       }
-      print("Firestore (tumDosyalariGetir): ${snapshot.docs.length} adet dosya getirildi.");
-      return snapshot.docs.map((doc) {
-        return DosyaModeli.fromFirestore(doc); // doc zaten DocumentSnapshot<Map<String, dynamic>> tipinde olmalı
-      }).toList();
+      return snapshot.docs.map((doc) => DosyaModeli.fromFirestore(doc)).toList();
     }).handleError((error) {
       print("Firestore Stream Hatası (tumDosyalariGetir): $error");
-      return <DosyaModeli>[]; // Hata durumunda boş liste döndür
+      return <DosyaModeli>[];
     });
   }
 
-  // TODO: Belirli bir dosyaya ait gönderileri getirme metodu (dosya_detay_sayfasi.dart için)
-  // Bu metod, Firestore'daki veri yapınıza göre (gönderilerin dosyalara nasıl bağlandığına göre)
-  // dikkatlice tasarlanmalıdır.
   Stream<List<Gonderi>> dosyadanGonderileriGetir(String dosyaId, {DocumentSnapshot? sonGorunenGonderi, int limit = 15}) {
     if (dosyaId.isEmpty) {
       print("Firestore Hatası (dosyadanGonderileriGetir): Dosya ID'si boş olamaz.");
-      return Stream.value([]); // Veya Stream.empty()
+      return Stream.value([]);
     }
-    print("Firestore (dosyadanGonderileriGetir): $dosyaId için gönderiler getiriliyor...");
-
-    // ÖRNEK 1: Gönderi dökümanlarında 'aitOlduguDosyaId' gibi bir alan varsa:
     Query<Map<String, dynamic>> sorgu = _firestore
         .collection(_gonderilerKoleksiyonu)
-        .where('aitOlduguDosyaId', isEqualTo: dosyaId) // BU ALAN ADI SİZİN YAPINIZA UYGUN OLMALI
+        .where('aitOlduguDosyaId', isEqualTo: dosyaId)
         .orderBy('olusturulmaZamani', descending: true)
         .limit(limit);
-
-    // ÖRNEK 2: Gönderi dökümanlarında 'dosyalar' diye bir array varsa ve dosyaId'yi içeriyorsa:
-    // Query<Map<String, dynamic>> sorgu = _firestore
-    //     .collection(_gonderilerKoleksiyonu)
-    //     .where('dosyalar', arrayContains: dosyaId) // BU ALAN ADI SİZİN YAPINIZA UYGUN OLMALI
-    //     .orderBy('olusturulmaZamani', descending: true)
-    //     .limit(limit);
-
 
     if (sonGorunenGonderi != null) {
       sorgu = sorgu.startAfterDocument(sonGorunenGonderi);
     }
 
-    return sorgu.snapshots().asyncMap((snapshot) async { // asyncMap kullanımı
-      if (snapshot.docs.isEmpty) {
-        return <Gonderi>[];
-      }
-      // Gönderileri Gonderi modeline dönüştürürken yayınlayan kullanıcı bilgisini de çekiyoruz.
+    return sorgu.snapshots().asyncMap((snapshot) async {
+      if (snapshot.docs.isEmpty) return <Gonderi>[];
       List<Gonderi> gonderiler = [];
       for (var doc in snapshot.docs) {
         Kullanici? yayinlayanKullanici;
         final String? kullaniciId = doc.data()['kullaniciId'] as String?;
         if (kullaniciId != null && kullaniciId.isNotEmpty) {
-          yayinlayanKullanici = await kullaniciGetir(kullaniciId); // Mevcut kullaniciGetir metodunu kullan
+          yayinlayanKullanici = await kullaniciGetir(kullaniciId);
         }
+        // Gonderi.dokumandanUret metodunuzun da güncellenmiş Firestore yapısını
+        // (resimUrls, kategori) desteklediğinden emin olun.
         gonderiler.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
       }
       return gonderiler;
@@ -335,5 +337,4 @@ class FirestoreServisi {
       return <Gonderi>[];
     });
   }
-
 }

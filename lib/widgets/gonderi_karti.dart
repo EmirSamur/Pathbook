@@ -7,17 +7,19 @@ import 'package:pathbooks/servisler/firestoreseervisi.dart'; // Firestore servis
 class ContentCard extends StatefulWidget {
   final String gonderiId;
   final String imageUrl;
-  final String profileUrl; // Gönderiyi paylaşanın profil resmi
-  final String userName;   // Gönderiyi paylaşanın kullanıcı adı
-  final String location;   // Gönderi açıklaması veya konumu
+  final String profileUrl;
+  final String userName;
+  final String location; // Bu artık 'konum' bilgisini tutacak
+  final String? description; // YENİ: Gönderi açıklaması (opsiyonel)
+  final String? category;    // YENİ: Gönderi kategorisi (opsiyonel)
   final int initialLikeCount;
   final int initialCommentCount;
-  final String aktifKullaniciId; // Mevcut aktif kullanıcının ID'si
+  final String aktifKullaniciId;
 
-  final VoidCallback? onProfileTap; // Sağdaki profil resmine tıklandığında
+  final VoidCallback? onProfileTap;
   final VoidCallback? onShareTap;
-  final VoidCallback? onMoreTap;  // Alt metin bloğundaki üç nokta
-  final Function(String gonderiId)? onCommentTap; // Yorum ikonuna tıklandığında
+  final VoidCallback? onMoreTap;
+  final Function(String gonderiId)? onCommentTap;
 
   const ContentCard({
     Key? key,
@@ -25,7 +27,9 @@ class ContentCard extends StatefulWidget {
     required this.imageUrl,
     required this.profileUrl,
     required this.userName,
-    required this.location,
+    required this.location,   // Bu parametre artık 'konum' için kullanılacak
+    this.description,       // YENİ eklendi
+    this.category,          // YENİ eklendi
     required this.initialLikeCount,
     required this.initialCommentCount,
     required this.aktifKullaniciId,
@@ -66,6 +70,8 @@ class _ContentCardState extends State<ContentCard> {
     if (widget.gonderiId != oldWidget.gonderiId) {
       _likeCount = widget.initialLikeCount;
       _commentCount = widget.initialCommentCount;
+      // description ve category gibi yeni alanlar için de güncelleme gerekebilir,
+      // ancak bunlar genellikle gönderi ile sabit kalır, beğeni/yorum gibi dinamik değişmez.
       needsRecheck = true;
     } else {
       if (widget.initialLikeCount != _likeCount) {
@@ -95,7 +101,6 @@ class _ContentCardState extends State<ContentCard> {
       return;
     }
     if (!mounted) return;
-    // DÜZELTİLMİŞ DEĞİŞKEN ADI:
     bool liked = await _firestoreServisi.kullaniciGonderiyiBegendiMi(
       gonderiId: widget.gonderiId,
       aktifKullaniciId: widget.aktifKullaniciId,
@@ -123,7 +128,6 @@ class _ContentCardState extends State<ContentCard> {
     });
 
     try {
-      // DÜZELTİLMİŞ DEĞİŞKEN ADI:
       await _firestoreServisi.gonderiBegenToggle(
         gonderiId: widget.gonderiId,
         aktifKullaniciId: widget.aktifKullaniciId,
@@ -151,7 +155,7 @@ class _ContentCardState extends State<ContentCard> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black,
+      color: Colors.black, // Arka plan rengi
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -171,20 +175,19 @@ class _ContentCardState extends State<ContentCard> {
                 child: Center(child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[700], size: 60)),
               ),
             )
-                : Container(
+                : Container( // Resim URL'i boşsa veya yüklenemediyse
               color: Colors.grey[900],
               child: Center(child: Icon(Icons.hide_image_outlined, color: Colors.grey[700], size: 60)),
             ),
           ),
 
-          // Sağ Kenar Eylem Butonları (Profil resmi en üste alındı)
+          // Sağ Kenar Eylem Butonları
           Positioned(
             right: 10,
-            bottom: MediaQuery.of(context).size.height * 0.10, // Dikey konumu ayarlayın
+            bottom: MediaQuery.of(context).size.height * 0.10,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // GÖNDERİYİ PAYLAŞANIN PROFİL RESMİ VE TAKİP BUTONU
                 Stack(
                   alignment: Alignment.bottomCenter,
                   children: [
@@ -194,41 +197,36 @@ class _ContentCardState extends State<ContentCard> {
                         padding: const EdgeInsets.only(bottom: 10.0),
                         child: CircleAvatar(
                           radius: 25,
-                          backgroundColor: Colors.grey[700], // Profil resmi yüklenemezse
+                          backgroundColor: Colors.grey[700],
                           backgroundImage: widget.profileUrl.isNotEmpty ? NetworkImage(widget.profileUrl) : null,
                           child: widget.profileUrl.isEmpty ? Icon(Icons.person, color: Colors.white70, size: 30) : null,
                         ),
                       ),
                     ),
-                    // Takip Et "+" Butonu
                     Positioned(
                       child: Container(
-                        width: 22, // Boyut biraz artırıldı
+                        width: 22,
                         height: 22,
                         decoration: BoxDecoration(
-                          color: Colors.pinkAccent, // Renk değiştirildi
+                          color: Colors.pinkAccent,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.black, width: 1.8), // Arka plan siyah olduğu için border siyah
+                          border: Border.all(color: Colors.black, width: 1.8),
                         ),
-                        child: Icon(Icons.add, color: Colors.white, size: 18), // Boyut artırıldı
+                        child: Icon(Icons.add, color: Colors.white, size: 18),
                       ),
                     )
                   ],
                 ),
-                SizedBox(height: 20), // Profil resmi ile ilk eylem butonu arası
-
-                // BEĞEN BUTONU VE SAYACI
+                SizedBox(height: 20),
                 _buildActionIconButton(
-                  icon: _isLiked ? Icons.favorite : Icons.favorite_border_outlined, //favorite_border_outlined daha belirgin
-                  label: _likeCount > 0 ? _likeCount.toString() : " ", // Sayı 0 ise boşluk bırakarak yerini koru
+                  icon: _isLiked ? Icons.favorite : Icons.favorite_border_outlined,
+                  label: _likeCount > 0 ? _likeCount.toString() : " ",
                   color: _isLiked ? Colors.redAccent[400] : Colors.white,
                   onTap: _isLiking ? null : _toggleLike,
                 ),
                 SizedBox(height: 22),
-
-                // YORUM BUTONU VE SAYACI
                 _buildActionIconButton(
-                  icon: Icons.chat_bubble_outline_rounded, // Daha dolgun bir ikon
+                  icon: Icons.chat_bubble_outline_rounded,
                   label: _commentCount > 0 ? _commentCount.toString() : " ",
                   color: Colors.white,
                   onTap: () {
@@ -238,19 +236,17 @@ class _ContentCardState extends State<ContentCard> {
                   },
                 ),
                 SizedBox(height: 22),
-
-                // KAYDET BUTONU
-                _buildActionIconButton(
-                  icon: Icons.bookmark_border_outlined, // Daha belirgin
+                _buildActionIconButton( // Kaydet butonu
+                  icon: Icons.bookmark_border_outlined,
                   color: Colors.white,
-                  onTap: () { print("Kaydet tıklandı: ${widget.gonderiId}"); },
+                  onTap: () {
+                    print("Kaydet tıklandı: ${widget.gonderiId}");
+                    // TODO: Kaydetme fonksiyonelliği
+                  },
                 ),
                 SizedBox(height: 22),
-
-                // PAYLAŞ BUTONU
                 _buildActionIconButton(
-                  icon: Icons.send_outlined, // Daha standart bir paylaşım ikonu
-                  // flipIconHorizontal: true, // send_outlined için çevirmeye gerek yok
+                  icon: Icons.send_outlined,
                   color: Colors.white,
                   onTap: widget.onShareTap,
                 ),
@@ -264,13 +260,13 @@ class _ContentCardState extends State<ContentCard> {
             left: 0,
             right: 0,
             child: Container(
-              padding: EdgeInsets.fromLTRB(15, 20, 10, 15),
+              padding: EdgeInsets.fromLTRB(15, 15, 10, 15), // Üst padding biraz azaltıldı
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black.withOpacity(0.0), Colors.black.withOpacity(0.9)], // Gradyan biraz daha koyu
+                  colors: [Colors.black.withOpacity(0.0), Colors.black.withOpacity(0.95)], // Gradyan biraz daha yoğun
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: [0.0, 0.65],
+                  stops: [0.0, 0.6], // Gradyan başlangıç noktası ayarlandı
                 ),
               ),
               child: Row(
@@ -286,23 +282,71 @@ class _ContentCardState extends State<ContentCard> {
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 16.5, // Biraz daha büyük
-                            shadows: [Shadow(blurRadius: 1.5, color: Colors.black87, offset: Offset(0,1))], // Daha belirgin gölge
+                            fontSize: 16, // Boyut sabitlendi
+                            shadows: [Shadow(blurRadius: 1.5, color: Colors.black87, offset: Offset(0,1))],
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(height: 5),
-                        if (widget.location.isNotEmpty)
-                          Text(
-                            widget.location,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.95),
-                              fontSize: 14.5, // Biraz daha büyük
-                              shadows: [Shadow(blurRadius: 1, color: Colors.black54, offset: Offset(0,1))],
+                        SizedBox(height: 4), // Kullanıcı adı ile açıklama/konum arası boşluk
+                        // YENİ: Açıklamayı (description) göster
+                        if (widget.description != null && widget.description!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 3.0), // Açıklama ile konum arası boşluk için
+                            child: Text(
+                              widget.description!,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9), // Biraz daha opak
+                                fontSize: 14, // Boyut sabitlendi
+                                shadows: [Shadow(blurRadius: 1, color: Colors.black54, offset: Offset(0,1))],
+                              ),
+                              maxLines: 2, // Açıklama için 2 satır
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          ),
+                        // Mevcut 'location' parametresi artık 'konum'u gösteriyor
+                        if (widget.location.isNotEmpty)
+                          Row( // Konum ve Kategori için Row
+                            children: [
+                              Icon(Icons.location_on_outlined, color: Colors.white70, size: 15),
+                              SizedBox(width: 4),
+                              Expanded( // Konum metni uzunsa sığması için
+                                child: Text(
+                                  widget.location,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8), // Biraz daha az opak
+                                    fontSize: 13, // Boyut sabitlendi
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        // YENİ: Kategoriyi göster (eğer varsa)
+                        if (widget.category != null && widget.category!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3.0), // Konum ile kategori arası boşluk
+                            child: Row(
+                              children: [
+                                Icon(
+                                    _getCategoryIcon(widget.category!), // Kategoriye göre ikon
+                                    color: Colors.white70,
+                                    size: 15
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  widget.category!,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontSize: 13,
+                                    fontStyle: FontStyle.italic, // Kategoriyi italik yapabiliriz
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
                           ),
                       ],
                     ),
@@ -311,7 +355,7 @@ class _ContentCardState extends State<ContentCard> {
                     padding: const EdgeInsets.only(left: 8.0, bottom: 4.0),
                     child: GestureDetector(
                       onTap: widget.onMoreTap,
-                      child: Icon(Icons.more_horiz, color: Colors.white, size: 32), // İkon boyutu artırıldı
+                      child: Icon(Icons.more_horiz, color: Colors.white, size: 30), // Boyut sabitlendi
                     ),
                   ),
                 ],
@@ -323,17 +367,32 @@ class _ContentCardState extends State<ContentCard> {
     );
   }
 
+  // Kategoriye göre ikon döndüren yardımcı metod
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'doğa':
+        return Icons.park_outlined;
+      case 'tarih':
+        return Icons.museum_outlined;
+      case 'kültür':
+        return Icons.palette_outlined;
+      case 'yeme-içme':
+        return Icons.restaurant_outlined;
+      default:
+        return Icons.category_outlined; // Varsayılan ikon
+    }
+  }
+
   Widget _buildActionIconButton({
     required IconData icon,
     String? label,
     Color? color,
     VoidCallback? onTap,
     bool flipIconHorizontal = false,
-    double iconSize = 33, // İKON BOYUTU ARTIRILDI
-    double labelSize = 13, // ETİKET BOYUTU ARTIRILDI
+    double iconSize = 32, // Boyut sabitlendi
+    double labelSize = 12.5, // Boyut sabitlendi
   }) {
     Widget iconWidget = Icon(icon, color: color ?? Colors.white, size: iconSize,
-      // İkona gölge ekleyerek daha belirgin hale getirebiliriz
       shadows: [
         Shadow(blurRadius: 3, color: Colors.black.withOpacity(0.6), offset: Offset(0,1))
       ],
@@ -345,20 +404,20 @@ class _ContentCardState extends State<ContentCard> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4.0), // Dikey padding biraz azaltıldı
+        padding: const EdgeInsets.symmetric(vertical: 3.0), // Dikey padding ayarlandı
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             iconWidget,
-            if (label != null && label.isNotEmpty && label != " ") SizedBox(height: 2), // Etiket varsa ve sadece boşluk değilse
+            if (label != null && label.isNotEmpty && label != " ") SizedBox(height: 2.5), // Yükseklik ayarlandı
             if (label != null && label.isNotEmpty && label != " ")
               Text(
                 label,
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: labelSize,
-                    fontWeight: FontWeight.w600, // Biraz daha kalın
-                    shadows: [ // Metne de gölge
+                    fontWeight: FontWeight.w600,
+                    shadows: [
                       Shadow(blurRadius: 2, color: Colors.black.withOpacity(0.7), offset: Offset(0,1))
                     ]
                 ),

@@ -10,15 +10,12 @@ import 'package:pathbooks/modeller/kullanici.dart';
 // -----------------------------------
 
 // --- Sayfa Importları ---
-// Dosya adında "%C3%B6" gibi karakterler olmamalı. "yonlendirme.dart" olmalı.
 import 'package:pathbooks/yönlendirme.dart'; // Varsayılan olarak 'yonlendirme.dart'
 import 'package:pathbooks/sayfalar/girissayfasi.dart';
 import 'package:pathbooks/sayfalar/hesapolustur.dart';
 // -----------------------------------
 
-// **** YENİ: Timeago importu ****
 import 'package:timeago/timeago.dart' as timeago;
-
 import 'firebase_options.dart'; // Firebase CLI ile oluşturulan dosya
 
 void main() async {
@@ -27,9 +24,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // **** YENİ: Timeago için Türkçe dil ayarları ****
   timeago.setLocaleMessages('tr', timeago.TrMessages());
-  timeago.setDefaultLocale('tr'); // Varsayılan lokali ayarla
+  timeago.setDefaultLocale('tr');
 
   runApp(const MyApp());
 }
@@ -41,45 +37,31 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // 1. FirestoreServisi'ni sağla (bağımsız)
         Provider<FirestoreServisi>(
           create: (_) => FirestoreServisi(),
         ),
-        // 2. YetkilendirmeServisi'ni FirestoreServisi'ne bağımlı olarak ProxyProvider ile sağla
         ProxyProvider<FirestoreServisi, YetkilendirmeServisi>(
-          // update fonksiyonu, dinlenen provider (FirestoreServisi) her değiştiğinde
-          // veya YetkilendirmeServisi ilk kez oluşturulduğunda çağrılır.
-          // `firestoreServisi` parametresi, Provider<FirestoreServisi>'nden gelen örnektir.
-          // `previousYetkilendirmeServisi` ise (varsa) bir önceki YetkilendirmeServisi örneğidir.
           update: (context, firestoreServisi, previousYetkilendirmeServisi) =>
               YetkilendirmeServisi(firestoreServisi: firestoreServisi),
-          // Eğer YetkilendirmeServisi'nin state'ini korumak istemiyorsanız (genellikle gerekmez):
-          // create: (context) => YetkilendirmeServisi(
-          //   firestoreServisi: Provider.of<FirestoreServisi>(context, listen: false),
-          // ),
-          // Ancak ProxyProvider, dinlenen provider güncellendiğinde bağımlı provider'ı da
-          // yeniden oluşturmak veya güncellemek için daha iyidir.
         ),
-        // 3. Kullanıcı durumunu StreamProvider ile dinle
         StreamProvider<Kullanici?>(
           create: (context) => context.read<YetkilendirmeServisi>().durumTakipcisi,
-          initialData: null, // Başlangıçta kullanıcı bilgisi yok
+          initialData: null,
         ),
       ],
       child: MaterialApp(
         title: 'Pathbooks',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          // --- Ana Tema Ayarları (Siyah Tema) ---
           brightness: Brightness.dark,
           scaffoldBackgroundColor: Colors.black,
+          fontFamily: 'Bebas', // GENEL VARSAYILAN FONT
 
-          // --- Renk Şeması (Siyah Temaya Uygun) ---
           colorScheme: ColorScheme.dark(
             primary: Colors.red[700]!,
             secondary: Colors.redAccent[400]!,
             background: Colors.black,
-            surface: Color(0xFF1E1E1E),
+            surface: const Color(0xFF1E1E1E),
             error: Colors.orange[700]!,
             onPrimary: Colors.white,
             onSecondary: Colors.white,
@@ -88,24 +70,41 @@ class MyApp extends StatelessWidget {
             onError: Colors.white,
           ),
 
-          // --- AppBar Teması ---
           appBarTheme: AppBarTheme(
-            backgroundColor: Color(0xFF121212),
+            backgroundColor: const Color(0xFF121212),
             elevation: 0,
             centerTitle: true,
-            titleTextStyle: TextStyle(
+            titleTextStyle: const TextStyle(
               color: Colors.white,
               fontSize: 22,
               fontWeight: FontWeight.bold,
               fontFamily: 'Bebas',
             ),
-            iconTheme: IconThemeData(color: Colors.white),
+            iconTheme: const IconThemeData(color: Colors.white),
           ),
 
-          // --- Input Alanları İçin Varsayılan Stil ---
+          textTheme: const TextTheme(
+            displayLarge: TextStyle(fontFamily: 'Bebas', fontSize: 96, fontWeight: FontWeight.w300, letterSpacing: -1.5),
+            displayMedium: TextStyle(fontFamily: 'Bebas', fontSize: 60, fontWeight: FontWeight.w300, letterSpacing: -0.5),
+            displaySmall: TextStyle(fontFamily: 'Bebas', fontSize: 48, fontWeight: FontWeight.w400),
+            headlineMedium: TextStyle(fontFamily: 'Bebas', fontSize: 34, fontWeight: FontWeight.w400, letterSpacing: 0.25),
+            headlineSmall: TextStyle(fontFamily: 'Bebas', fontSize: 24, fontWeight: FontWeight.w400),
+            titleLarge: TextStyle(fontFamily: 'Bebas', fontSize: 20, fontWeight: FontWeight.w500, letterSpacing: 0.15),
+            titleMedium: TextStyle(fontFamily: 'Bebas', fontSize: 16, fontWeight: FontWeight.w400, letterSpacing: 0.15),
+            titleSmall: TextStyle(fontFamily: 'Bebas', fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.1),
+            bodyLarge: TextStyle(fontFamily: 'OpenSans', fontSize: 16, fontWeight: FontWeight.w400, letterSpacing: 0.5), // Okunaklı font
+            bodyMedium: TextStyle(fontFamily: 'OpenSans', fontSize: 14, fontWeight: FontWeight.w400, letterSpacing: 0.25), // Okunaklı font
+            labelLarge: TextStyle(fontFamily: 'Bebas', fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 1.25),
+            bodySmall: TextStyle(fontFamily: 'OpenSans', fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0.4), // Okunaklı font
+            labelSmall: TextStyle(fontFamily: 'OpenSans', fontSize: 10, fontWeight: FontWeight.w400, letterSpacing: 1.5), // Okunaklı font
+          ).apply(
+            bodyColor: Colors.white,
+            displayColor: Colors.white.withOpacity(0.87),
+          ),
+
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
-            fillColor: Color(0xFF2C2C2E),
+            fillColor: const Color(0xFF2C2C2E),
             hintStyle: TextStyle(color: Colors.grey[600]),
             labelStyle: TextStyle(color: Colors.grey[400]),
             prefixIconColor: Colors.grey[400],
@@ -132,7 +131,6 @@ class MyApp extends StatelessWidget {
             ),
           ),
 
-          // --- Buton Temaları ---
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red[700],
@@ -141,38 +139,32 @@ class MyApp extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-              textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Bebas'),
             ),
           ),
           textButtonTheme: TextButtonThemeData(
             style: TextButton.styleFrom(
               foregroundColor: Colors.redAccent[200],
-              textStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, fontFamily: 'Bebas'),
             ),
           ),
-          // --- Diğer Tema Ayarları (Örnek) ---
           cardTheme: CardTheme(
-            color: Color(0xFF1E1E1E), // colorScheme.surface ile uyumlu
-            elevation: 1.0, // Daha sade bir görünüm için
-            margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0), // Kartlar arası boşluk
+            color: const Color(0xFF1E1E1E),
+            elevation: 1.0,
+            margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           bottomNavigationBarTheme: BottomNavigationBarThemeData(
-            backgroundColor: Color(0xFF121212), // AppBar ile aynı veya biraz farklı
-            selectedItemColor: Colors.red[700], // Temanın primary rengi
+            backgroundColor: const Color(0xFF121212),
+            selectedItemColor: Colors.red[700],
             unselectedItemColor: Colors.grey[500],
-            type: BottomNavigationBarType.fixed, // Tüm etiketleri göster
-            elevation: 4.0, // Hafif bir gölge
+            type: BottomNavigationBarType.fixed,
+            elevation: 4.0,
+            selectedLabelStyle: const TextStyle(fontFamily: 'Bebas', fontSize: 11, fontWeight: FontWeight.w600), // Font weight eklendi
+            unselectedLabelStyle: const TextStyle(fontFamily: 'Bebas', fontSize: 10),
           ),
-          // --- Varsayılan Metin Teması ---
-          // Projenizde genel metin stillerini buradan ayarlayabilirsiniz.
-          // textTheme: TextTheme(
-          //   bodyLarge: TextStyle(color: Colors.white),
-          //   bodyMedium: TextStyle(color: Colors.grey[300]),
-          //   // ... diğer stiller
-          // ),
         ),
-        home: const Yonlendirme(), // Dosya adı 'yonlendirme.dart' olmalı
+        home: const Yonlendirme(),
         routes: {
           '/girisYap': (context) => const Girissayfasi(),
           '/hesapOlustur': (context) => const HesapOlustur(),
