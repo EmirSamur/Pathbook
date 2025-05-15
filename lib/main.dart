@@ -2,30 +2,37 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart'; // <<<--- BU IMPORT'U EKLE
 
 // --- Servis ve Model Importları ---
 import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
-import 'package:pathbooks/servisler/firestoreseervisi.dart'; // Dosya adı kontrol edilmeli
+import 'package:pathbooks/servisler/firestoreseervisi.dart';
 import 'package:pathbooks/modeller/kullanici.dart';
 // -----------------------------------
 
 // --- Sayfa Importları ---
-import 'package:pathbooks/yönlendirme.dart'; // Varsayılan olarak 'yonlendirme.dart'
+import 'package:pathbooks/yönlendirme.dart';
 import 'package:pathbooks/sayfalar/girissayfasi.dart';
 import 'package:pathbooks/sayfalar/hesapolustur.dart';
 // -----------------------------------
 
 import 'package:timeago/timeago.dart' as timeago;
-import 'firebase_options.dart'; // Firebase CLI ile oluşturulan dosya
+import 'firebase_options.dart';
 
-void main() async {
+Future<void> main() async { // void yerine Future<void> ve async eklendi
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // timeago için yerelleştirme
   timeago.setLocaleMessages('tr', timeago.TrMessages());
   timeago.setDefaultLocale('tr');
+
+  // intl paketi için tarih formatlama yerelleştirmesi
+  await initializeDateFormatting('tr_TR', null); // <<<--- BU SATIR EKLENDİ
+  // Eğer başka yerel ayarlar da kullanacaksanız (örn: 'en_US'), onlar için de ekleyin:
+  // await initializeDateFormatting('en_US', null);
 
   runApp(const MyApp());
 }
@@ -53,9 +60,10 @@ class MyApp extends StatelessWidget {
         title: 'Pathbooks',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
+          // ... (Tema ayarlarınız aynı kalacak) ...
           brightness: Brightness.dark,
           scaffoldBackgroundColor: Colors.black,
-          fontFamily: 'Bebas', // GENEL VARSAYILAN FONT
+          fontFamily: 'Bebas',
 
           colorScheme: ColorScheme.dark(
             primary: Colors.red[700]!,
@@ -92,11 +100,11 @@ class MyApp extends StatelessWidget {
             titleLarge: TextStyle(fontFamily: 'Bebas', fontSize: 20, fontWeight: FontWeight.w500, letterSpacing: 0.15),
             titleMedium: TextStyle(fontFamily: 'Bebas', fontSize: 16, fontWeight: FontWeight.w400, letterSpacing: 0.15),
             titleSmall: TextStyle(fontFamily: 'Bebas', fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.1),
-            bodyLarge: TextStyle(fontFamily: 'OpenSans', fontSize: 16, fontWeight: FontWeight.w400, letterSpacing: 0.5), // Okunaklı font
-            bodyMedium: TextStyle(fontFamily: 'OpenSans', fontSize: 14, fontWeight: FontWeight.w400, letterSpacing: 0.25), // Okunaklı font
+            bodyLarge: TextStyle(fontFamily: 'OpenSans', fontSize: 16, fontWeight: FontWeight.w400, letterSpacing: 0.5),
+            bodyMedium: TextStyle(fontFamily: 'OpenSans', fontSize: 14, fontWeight: FontWeight.w400, letterSpacing: 0.25),
             labelLarge: TextStyle(fontFamily: 'Bebas', fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 1.25),
-            bodySmall: TextStyle(fontFamily: 'OpenSans', fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0.4), // Okunaklı font
-            labelSmall: TextStyle(fontFamily: 'OpenSans', fontSize: 10, fontWeight: FontWeight.w400, letterSpacing: 1.5), // Okunaklı font
+            bodySmall: TextStyle(fontFamily: 'OpenSans', fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0.4),
+            labelSmall: TextStyle(fontFamily: 'OpenSans', fontSize: 10, fontWeight: FontWeight.w400, letterSpacing: 1.5),
           ).apply(
             bodyColor: Colors.white,
             displayColor: Colors.white.withOpacity(0.87),
@@ -160,7 +168,7 @@ class MyApp extends StatelessWidget {
             unselectedItemColor: Colors.grey[500],
             type: BottomNavigationBarType.fixed,
             elevation: 4.0,
-            selectedLabelStyle: const TextStyle(fontFamily: 'Bebas', fontSize: 11, fontWeight: FontWeight.w600), // Font weight eklendi
+            selectedLabelStyle: const TextStyle(fontFamily: 'Bebas', fontSize: 11, fontWeight: FontWeight.w600),
             unselectedLabelStyle: const TextStyle(fontFamily: 'Bebas', fontSize: 10),
           ),
         ),

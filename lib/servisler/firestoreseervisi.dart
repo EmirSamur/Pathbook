@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pathbooks/modeller/kullanici.dart'; // Kullanici modelinizin yolu
 import 'package:pathbooks/modeller/gonderi.dart';   // Gonderi modelinizin yolu
 import 'package:pathbooks/modeller/dosya_modeli.dart'; // DOSYA MODELİNİ İMPORT EDİN
+import 'package:pathbooks/modeller/oneri_modeli.dart';
 
 class FirestoreServisi {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -11,7 +12,7 @@ class FirestoreServisi {
   final String _dosyalarKoleksiyonu = "dosyalar";
   final String _begenilerAltKoleksiyonu = "begenenKullanicilar";
   final String _yorumlarAltKoleksiyonu = "yorumlar";
-
+  final String _onerilerKoleksiyonu = "oneriler";
   // --- KULLANICI İŞLEMLERİ --- (Mevcut haliyle kalabilir)
   Future<void> kullaniciOlustur({
     required String id,
@@ -62,6 +63,27 @@ class FirestoreServisi {
       print("Beklenmedik Hata (kullaniciGetir): $e");
       return null;
     }
+  }
+  Future<List<OneriModeli>> tumOnerileriGetir() async {
+    List<OneriModeli> onerilerListesi = [];
+    try {
+      QuerySnapshot<Map<String, dynamic>> querySnapshot =
+      await _firestore.collection(_onerilerKoleksiyonu).get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        onerilerListesi = querySnapshot.docs
+            .map((doc) => OneriModeli.dokumandanUret(doc))
+            .toList();
+        print("FirestoreServisi: ${onerilerListesi.length} adet öneri başarıyla çekildi.");
+      } else {
+        print("FirestoreServisi: 'oneriler' koleksiyonunda hiç belge bulunamadı.");
+      }
+    } catch (e) {
+      print("FirestoreServisi - tumOnerileriGetir HATA: $e");
+      // Hata durumunda boş liste döndürmek veya hatayı yeniden fırlatmak
+      // uygulamanın ihtiyacına göre belirlenebilir. Şimdilik boş liste.
+    }
+    return onerilerListesi;
   }
 
   Future<void> kullaniciGuncelle({

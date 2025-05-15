@@ -49,6 +49,7 @@ dependencies:
   flutter_staggered_grid_view:
   cached_network_image:
   flutter_launcher_icons:
+  intl:
 
 dev_dependencies:
   flutter_test:
