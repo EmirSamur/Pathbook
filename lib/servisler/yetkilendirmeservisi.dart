@@ -2,65 +2,79 @@
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pathbooks/modeller/kullanici.dart';
-import 'package:pathbooks/servisler/firestoreseervisi.dart'; // FirestoreServisi'ni import et
+import 'package:pathbooks/servisler/firestoreseervisi.dart';
 
 class YetkilendirmeServisi {
   final fb_auth.FirebaseAuth _firebaseAuth = fb_auth.FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
-  final FirestoreServisi _firestoreServisi; // FirestoreServisi'ni tutacak alan
+  final FirestoreServisi _firestoreServisi;
 
-  // --- AKTİF KULLANICI BİLGİLERİ ---
   String? _aktifKullaniciId;
-  Kullanici? _aktifKullaniciDetaylari; // Firestore'dan çekilen detaylı kullanıcı bilgisi
+  Kullanici? _aktifKullaniciDetaylari;
 
   String? get aktifKullaniciId => _aktifKullaniciId;
   Kullanici? get aktifKullaniciDetaylari => _aktifKullaniciDetaylari;
-  // --- ---
 
-  // Constructor: FirestoreServisi'ni dependency olarak alır
   YetkilendirmeServisi({required FirestoreServisi firestoreServisi})
-      : _firestoreServisi = firestoreServisi;
-
+      : _firestoreServisi = firestoreServisi {
+    // Servis oluşturulduğunda mevcut kullanıcı durumunu kontrol et
+    _firebaseAuth.authStateChanges().listen((fb_auth.User? user) async {
+      _aktifKullaniciId = user?.uid;
+      if (user != null) {
+        await _aktifKullaniciDetaylariniYukle(user.uid); // Detayları yükle
+      } else {
+        _aktifKullaniciDetaylari = null;
+      }
+      // Eğer ChangeNotifier kullanıyor olsaydık burada notifyListeners() çağırırdık.
+      // Şu an için bu stream'i dinleyen widget'lar (durumTakipcisi) zaten güncellenecek.
+    });
+  }
 
   Kullanici? _kullaniciAuthModelindenUret(fb_auth.User? firebaseUser) {
-    // Bu metod sadece Firebase Auth User objesinden temel Kullanici modeli üretir.
-    // Firestore'dan detaylı bilgiyi durumTakipcisi içinde çekeceğiz.
     return firebaseUser == null ? null : Kullanici.firebasedenUret(firebaseUser);
   }
 
+  // Firestore'dan kullanıcı detaylarını çekip _aktifKullaniciDetaylari'nı güncelleyen yardımcı metod
+  Future<void> _aktifKullaniciDetaylariniYukle(String kullaniciId) async {
+    try {
+      _aktifKullaniciDetaylari = await _firestoreServisi.kullaniciGetir(kullaniciId);
+      if (_aktifKullaniciDetaylari == null) {
+        // Firestore'da kullanıcı yoksa ve Auth'da varsa, Auth'dan temel bilgilerle doldur.
+        // Bu senaryo normalde kayitOl veya googleIleGiris sırasında Firestore'a yazıldığı için nadir olmalı.
+        fb_auth.User? currentUserAuth = _firebaseAuth.currentUser;
+        if (currentUserAuth != null && currentUserAuth.uid == kullaniciId) {
+          _aktifKullaniciDetaylari = Kullanici.firebasedenUret(currentUserAuth);
+          print("YetkilendirmeServisi: Firestore'da kullanıcı ($kullaniciId) bulunamadı, sadece Auth bilgileriyle oluşturuldu.");
+        }
+      }
+      // ChangeNotifier olsaydı: notifyListeners();
+    } catch (e) {
+      print("YetkilendirmeServisi (_aktifKullaniciDetaylariniYukle): Kullanıcı detayları çekilirken hata: $e");
+      // Hata durumunda da en azından Auth'dan gelen temel bilgiyi tutmaya çalışabiliriz
+      fb_auth.User? currentUserAuth = _firebaseAuth.currentUser;
+      if (currentUserAuth != null && currentUserAuth.uid == kullaniciId) {
+        _aktifKullaniciDetaylari = Kullanici.firebasedenUret(currentUserAuth);
+      } else {
+        _aktifKullaniciDetaylari = null;
+      }
+      // ChangeNotifier olsaydı: notifyListeners();
+    }
+  }
+
+
   Stream<Kullanici?> get durumTakipcisi {
     return _firebaseAuth.authStateChanges().asyncMap((fb_auth.User? firebaseUser) async {
-      _aktifKullaniciId = firebaseUser?.uid; // Her durumda aktif kullanıcı ID'sini güncelle
+      _aktifKullaniciId = firebaseUser?.uid;
 
       if (firebaseUser == null) {
-        _aktifKullaniciDetaylari = null; // Kullanıcı yoksa detayları da null yap
+        _aktifKullaniciDetaylari = null;
         return null;
       }
-
-      // Kullanıcı varsa, Firestore'dan detaylarını çek.
-      try {
-        // Önce Firestore'dan kullanıcıyı getirmeyi dene
-        _aktifKullaniciDetaylari = await _firestoreServisi.kullaniciGetir(firebaseUser.uid);
-
-        if (_aktifKullaniciDetaylari == null) {
-          // Firestore'da kullanıcı yoksa (örneğin, sadece Auth'a kayıt olmuş ama profil Firestore'a yazılmamış)
-          // Bu durum özellikle yeni kayıt olmuş veya Google ile ilk kez giriş yapmış kullanıcılar için olabilir.
-          // Firebase Auth bilgilerinden temel bir Kullanici nesnesi oluştur.
-          // Google ile giriş yapılıyorsa, Firestore'a kayıt işlemini googleIleGiris metodu halledecek.
-          // Normal kayıt için, kayitOl metodu Firestore'a yazmalı.
-          print("Firestore'da kullanıcı (${firebaseUser.uid}) bulunamadı. Sadece Auth bilgileri kullanılıyor.");
-          _aktifKullaniciDetaylari = Kullanici.firebasedenUret(firebaseUser);
-          // Eğer bu bir e-posta/şifre kullanıcısıysa ve Firestore'da yoksa,
-          // burada Firestore'a yazma işlemi de düşünülebilir, ancak bu genellikle
-          // kayitOl veya googleIleGiris metodlarının sorumluluğundadır.
-        }
-        return _aktifKullaniciDetaylari;
-      } catch (e) {
-        print("YetkilendirmeServisi - Aktif kullanıcı detayları çekilirken hata: $e");
-        // Hata durumunda en azından Firebase Auth bilgilerinden bir Kullanici nesnesi oluştur
-        _aktifKullaniciDetaylari = Kullanici.firebasedenUret(firebaseUser);
-        return _aktifKullaniciDetaylari;
-      }
+      // Detayları zaten _aktifKullaniciDetaylariniYukle ile veya constructor'daki listener ile güncelledik.
+      // Burada tekrar çekmek yerine mevcut _aktifKullaniciDetaylari'nı döndürebiliriz.
+      // Ancak, her auth state değiştiğinde en güncelini çekmek daha güvenli olabilir.
+      await _aktifKullaniciDetaylariniYukle(firebaseUser.uid);
+      return _aktifKullaniciDetaylari;
     });
   }
 
@@ -78,23 +92,18 @@ class YetkilendirmeServisi {
       final user = userCredential.user;
       if (user != null) {
         await user.updateDisplayName(kullaniciAdi);
-        // Yeni kullanıcıyı Firestore'a kaydet
         await _firestoreServisi.kullaniciOlustur(
           id: user.uid,
           email: email,
           kullaniciAdi: kullaniciAdi,
-          // fotoUrl başlangıçta boş olabilir veya varsayılan bir URL atanabilir.
         );
-        await user.reload();
-        fb_auth.User? updatedUser = _firebaseAuth.currentUser;
-        print('Kullanıcı oluşturuldu, DisplayName güncellendi ve Firestore\'a kaydedildi: ${updatedUser?.uid}');
+        await user.reload(); // Firebase Auth user nesnesini sunucudakiyle senkronize et
+        // fb_auth.User? updatedUser = _firebaseAuth.currentUser; // Bu satır yerine direkt user.uid kullan
 
-        // Firestore'dan güncel kullanıcı detaylarını çekip _aktifKullaniciDetaylari'nı set et
-        _aktifKullaniciDetaylari = await _firestoreServisi.kullaniciGetir(user.uid);
-        return _aktifKullaniciDetaylari ?? _kullaniciAuthModelindenUret(updatedUser); // Firestore'dan gelmezse Auth'dan üret
-      } else {
-        return null;
+        await _aktifKullaniciDetaylariniYukle(user.uid); // Detayları yükle ve _aktifKullaniciDetaylari'nı set et
+        return _aktifKullaniciDetaylari;
       }
+      return null;
     } on fb_auth.FirebaseAuthException catch (e) {
       throw e;
     } catch (e) {
@@ -108,10 +117,9 @@ class YetkilendirmeServisi {
         email: email,
         password: password,
       );
-      // Giriş yapıldığında da Firestore'dan kullanıcı detaylarını çek
       if (userCredential.user != null) {
-        _aktifKullaniciDetaylari = await _firestoreServisi.kullaniciGetir(userCredential.user!.uid);
-        return _aktifKullaniciDetaylari ?? _kullaniciAuthModelindenUret(userCredential.user);
+        await _aktifKullaniciDetaylariniYukle(userCredential.user!.uid);
+        return _aktifKullaniciDetaylari;
       }
       return null;
     } on fb_auth.FirebaseAuthException catch (e) {
@@ -127,8 +135,7 @@ class YetkilendirmeServisi {
         await _googleSignIn.signOut();
       }
       await _firebaseAuth.signOut();
-      _aktifKullaniciId = null; // ID'yi sıfırla
-      _aktifKullaniciDetaylari = null; // Detayları sıfırla
+      // _aktifKullaniciId ve _aktifKullaniciDetaylari constructor'daki listener tarafından zaten null yapılacak.
       print("Firebase oturumu başarıyla kapatıldı.");
     } catch (e) {
       throw Exception("Oturum kapatılırken bir hata oluştu.");
@@ -160,26 +167,61 @@ class YetkilendirmeServisi {
       final fb_auth.User? firebaseUser = userCredential.user;
 
       if (firebaseUser != null) {
-        // Google ile ilk kez giriş yapılıyorsa Firestore'a kaydet
-        if (userCredential.additionalUserInfo?.isNewUser == true) {
-          print("Yeni Google kullanıcısı, Firestore'a kaydediliyor...");
+        bool isNewUserInFirestore = false;
+        // Önce Firestore'da kullanıcı var mı diye kontrol et
+        Kullanici? existingFirestoreUser = await _firestoreServisi.kullaniciGetir(firebaseUser.uid);
+
+        if (existingFirestoreUser == null) {
+          isNewUserInFirestore = true;
+          print("Yeni Google kullanıcısı (Firestore'da yok), Firestore'a kaydediliyor...");
           await _firestoreServisi.kullaniciOlustur(
             id: firebaseUser.uid,
-            email: firebaseUser.email ?? googleUser.email, // Firebase'den gelen email öncelikli
+            email: firebaseUser.email ?? googleUser.email,
             kullaniciAdi: firebaseUser.displayName ?? googleUser.displayName ?? "Google Kullanıcısı",
             fotoUrl: firebaseUser.photoURL ?? googleUser.photoUrl ?? '',
           );
           print("Yeni Google kullanıcısı Firestore'a kaydedildi: ${firebaseUser.uid}");
         }
-        // Giriş yapıldığında Firestore'dan kullanıcı detaylarını çek
-        _aktifKullaniciDetaylari = await _firestoreServisi.kullaniciGetir(firebaseUser.uid);
-        return _aktifKullaniciDetaylari ?? _kullaniciAuthModelindenUret(firebaseUser);
+
+        await _aktifKullaniciDetaylariniYukle(firebaseUser.uid);
+        return _aktifKullaniciDetaylari;
       }
       return null;
     } on fb_auth.FirebaseAuthException catch (e) {
       throw e;
     } catch (e) {
       throw Exception("Google ile giriş sırasında beklenmedik bir hata oluştu.");
+    }
+  }
+
+  // YENİ EKLENEN METOD
+  Future<void> aktifKullaniciGuncelleVeYenidenYukle() async {
+    if (_aktifKullaniciId != null) {
+      print("YetkilendirmeServisi: Aktif kullanıcı detayları yeniden yükleniyor (ID: $_aktifKullaniciId)...");
+      await _aktifKullaniciDetaylariniYukle(_aktifKullaniciId!);
+      // Bu metodun kendisi doğrudan UI'ı güncellemez (ChangeNotifier olmadığı için).
+      // Bu metodu çağıran yer, UI'ın güncellenmesi için gerekli adımları atmalıdır.
+      // (Örneğin, Provider'ı dinleyen bir widget'ın state'ini güncellemek veya
+      //  ana widget ağacında bir state değişikliğini tetiklemek.)
+      //  durumTakipcisi stream'i zaten yeni _aktifKullaniciDetaylari ile bir event yayınlayacaktır
+      //  eğer bu metod çağrıldıktan sonra authStateChanges tetiklenirse veya
+      //  bu metodun dönüş değeri kullanılarak UI güncellenirse.
+      //  Daha proaktif olmak için, bu metodun bir bool döndürmesi (başarılı/başarısız)
+      //  veya güncellenmiş Kullanici nesnesini döndürmesi de düşünülebilir.
+      //  Şimdilik sadece _aktifKullaniciDetaylari'nı güncelliyor.
+      print("YetkilendirmeServisi: Aktif kullanıcı detayları yeniden yüklendi.");
+    } else {
+      print("YetkilendirmeServisi: Yeniden yüklenecek aktif kullanıcı ID'si bulunamadı.");
+    }
+  }
+
+  // Profil düzenleme sayfasından sonra manuel olarak Kullanici nesnesini set etmek için (opsiyonel)
+  void setAktifKullaniciDetaylariManuel(Kullanici? kullanici) {
+    if (kullanici != null && _aktifKullaniciId == kullanici.id) {
+      _aktifKullaniciDetaylari = kullanici;
+      print("YetkilendirmeServisi: Aktif kullanıcı detayları manuel olarak set edildi.");
+      // ChangeNotifier olsaydı: notifyListeners();
+      // Bu, durumTakipcisi'nın bir sonraki event'inde bu güncel bilgiyi kullanmasını sağlar.
     }
   }
 }
