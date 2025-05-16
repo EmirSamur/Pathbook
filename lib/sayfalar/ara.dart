@@ -1,12 +1,12 @@
 // lib/sayfalar/ara.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:pathbooks/modeller/dosya_modeli.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pathbooks/modeller/gonderi.dart';
 import 'package:pathbooks/servisler/firestoreseervisi.dart';
-// GonderiDetaySayfasi importu burada gerekli değil, çünkü doğrudan ona yönlendirmiyoruz.
-// Eğer bir dosyaya ait gönderileri listelemek için farklı bir mekanizma kurarsak
-// (örneğin Akis sayfasına filtreli yönlendirme), o zaman ilgili sayfaların importu gerekebilir.
+// DOĞRU İMPORT: gonderi_karti.dart yerine content_card.dart ve widget adı ContentCard
+import 'package:pathbooks/widgets/gonderi_karti.dart'; // <--- DEĞİŞTİ
+import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
 
 class AraSayfasi extends StatefulWidget {
   const AraSayfasi({Key? key}) : super(key: key);
@@ -17,18 +17,40 @@ class AraSayfasi extends StatefulWidget {
 
 class _AraSayfasiState extends State<AraSayfasi> {
   late FirestoreServisi _firestoreServisi;
-  List<DosyaModeli> _dosyalar = [];
+  late YetkilendirmeServisi _yetkilendirmeServisi;
+  List<Gonderi> _gonderiler = [];
   bool _isLoading = true;
-  String _selectedFilter = "Tümü"; // Filtre seçeneklerini güncelledim
-  String _selectedSort = "Son Güncelleme"; // Sıralama seçeneklerini güncelledim
+  String? _aktifKullaniciId;
+
+  String _selectedTheme = "Doğa";
+  final List<String> _temalar = ["Doğa", "Tarih", "Kültür", "Yeme-İçme"];
+
+  final Map<String, Map<String, dynamic>> _sortOptions = {
+    "Son Yüklenenler": {"alan": "olusturulmaZamani", "azalan": true},
+    "En Popülerler": {"alan": "begeniSayisi", "azalan": true},
+    "En Çok Yorum Alanlar": {"alan": "yorumSayisi", "azalan": true},
+    "En Eskiler": {"alan": "olusturulmaZamani", "azalan": false},
+  };
+  late String _selectedSortKey;
+
   TextEditingController _aramaController = TextEditingController();
   String _aramaSorgusu = "";
+
+  DocumentSnapshot? _sonGorunenGonderiDoc;
+  bool _dahaFazlaYukleniyor = false;
+  bool _hepsiYuklendi = false;
+  final ScrollController _scrollController = ScrollController();
+
 
   @override
   void initState() {
     super.initState();
     _firestoreServisi = Provider.of<FirestoreServisi>(context, listen: false);
-    _dosyalariYukle();
+    _yetkilendirmeServisi = Provider.of<YetkilendirmeServisi>(context, listen: false);
+    _aktifKullaniciId = _yetkilendirmeServisi.aktifKullaniciId;
+
+    _selectedSortKey = _sortOptions.keys.first;
+    _gonderileriYukle(ilkYukleme: true);
 
     _aramaController.addListener(() {
       if (mounted && _aramaSorgusu != _aramaController.text) {
@@ -37,87 +59,139 @@ class _AraSayfasiState extends State<AraSayfasi> {
         });
       }
     });
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8 &&
+          !_dahaFazlaYukleniyor &&
+          !_hepsiYuklendi &&
+          !_isLoading) {
+        print("AraSayfasi: Scroll sonuna yaklaşıldı, daha fazla gönderi yükleniyor...");
+        _gonderileriYukle(ilkYukleme: false);
+      }
+    });
   }
 
-  Future<void> _dosyalariYukle() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+  Future<void> _gonderileriYukle({bool ilkYukleme = false}) async {
+    if (!mounted || (ilkYukleme == false && _dahaFazlaYukleniyor) || (ilkYukleme == false && _hepsiYuklendi)) return;
+
+    setState(() {
+      if (ilkYukleme) {
+        _isLoading = true;
+        _gonderiler.clear();
+        _sonGorunenGonderiDoc = null;
+        _hepsiYuklendi = false;
+      } else {
+        _dahaFazlaYukleniyor = true;
+      }
+    });
+
     try {
-      // TODO: FirestoreServisi'ne _selectedFilter ve _selectedSort'a göre
-      // dosya getirme metodu eklenmeli.
-      // Şimdilik FirestoreServisi.tumDosyalariGetir()'in bu parametreleri
-      // opsiyonel olarak alabileceğini varsayalım.
-      List<DosyaModeli> gelenDosyalar = await _firestoreServisi.tumDosyalariGetir(
-        // filtre: _selectedFilter, // Örnek
-        // siralama: _selectedSort, // Örnek
-      ).first;
+      final siralamaAyari = _sortOptions[_selectedSortKey]!;
+      Map<String, dynamic> sonuc = await _firestoreServisi.gonderileriGetirFiltreleSirala(
+        tema: _selectedTheme,
+        siralamaAlani: siralamaAyari["alan"] as String,
+        azalan: siralamaAyari["azalan"] as bool,
+        limitSayisi: 10,
+        sonGorunenDoc: ilkYukleme ? null : _sonGorunenGonderiDoc,
+      );
+
+      List<Gonderi> gelenGonderiler = sonuc['gonderiler'] as List<Gonderi>;
+      DocumentSnapshot? yeniSonDoc = sonuc['sonDoc'] as DocumentSnapshot?;
 
       if (mounted) {
         setState(() {
-          _dosyalar = gelenDosyalar;
+          _gonderiler.addAll(gelenGonderiler);
+          _sonGorunenGonderiDoc = yeniSonDoc;
+
+          if (gelenGonderiler.length < 10 || yeniSonDoc == null) {
+            _hepsiYuklendi = true;
+            print("AraSayfasi: Tüm gönderiler yüklendi veya bu sayfada daha fazla gönderi yok.");
+          }
+
           _isLoading = false;
+          _dahaFazlaYukleniyor = false;
         });
       }
-    } catch (e) {
-      print("AraSayfasi - Dosya yükleme hatası: $e");
-      if (mounted) setState(() => _isLoading = false);
+    } catch (e, s) {
+      print("====== ARA SAYFASI - GÖNDERİ YÜKLEME HATASI ======");
+      print("İLK YÜKLEME: $ilkYukleme, SEÇİLİ TEMA: $_selectedTheme, SIRALAMA: $_selectedSortKey");
+      print("HATA TİPİ: ${e.runtimeType}");
+      print("HATA MESAJI: $e");
+      print("STACK TRACE: \n$s");
+      print("================================================");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _dahaFazlaYukleniyor = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gönderiler yüklenirken bir hata oluştu. (Detaylar konsolda)")),
+        );
+      }
     }
   }
 
-  List<DosyaModeli> get _filtrelenmisDosyalar {
+  List<Gonderi> get _gosterilecekGonderiler {
     if (_aramaSorgusu.isEmpty) {
-      return _dosyalar;
+      return _gonderiler;
     }
-    return _dosyalar.where((dosya) {
-      final String dosyaAdiLower = dosya.ad.toLowerCase();
-      final String aramaSorgusuLower = _aramaSorgusu.toLowerCase();
-      return dosyaAdiLower.contains(aramaSorgusuLower);
+    final String aramaSorgusuLower = _aramaSorgusu.toLowerCase();
+    return _gonderiler.where((gonderi) {
+      final bool aciklamaEslesiyor = gonderi.aciklama.toLowerCase().contains(aramaSorgusuLower);
+      final String konumTextLower = gonderi.konum?.toLowerCase() ?? "";
+      final bool konumEslesiyor = konumTextLower.contains(aramaSorgusuLower);
+      final String kullaniciAdiTextLower = gonderi.yayinlayanKullanici?.kullaniciAdi?.toLowerCase() ?? "";
+      final bool kullaniciAdiEslesiyor = kullaniciAdiTextLower.contains(aramaSorgusuLower);
+      return aciklamaEslesiyor || konumEslesiyor || kullaniciAdiEslesiyor;
     }).toList();
   }
 
   @override
   void dispose(){
     _aramaController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (_aktifKullaniciId == null && _yetkilendirmeServisi.aktifKullaniciId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if(mounted) setState(() => _aktifKullaniciId = _yetkilendirmeServisi.aktifKullaniciId);
+      });
+    }
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
+      appBar: AppBar( /* ... AppBar aynı ... */
         automaticallyImplyLeading: false,
         backgroundColor: theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor,
-        elevation: 0, // AppBar gölgesini kaldır
-        titleSpacing: 0, // Sol ve sağ boşlukları kaldır
+        elevation: 0,
+        titleSpacing: 0,
         title: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0), // Dikey padding eklendi
-          child: SizedBox( // TextField'ın yüksekliğini kontrol etmek için
-            height: 42, // TextField yüksekliği
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          child: SizedBox(
+            height: 42,
             child: TextField(
               controller: _aramaController,
               style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 15.5),
               decoration: InputDecoration(
-                hintText: "Pathbook'ta ara...",
+                hintText: "Pathbook'ta keşfet...",
                 hintStyle: TextStyle(color: (theme.textTheme.bodyLarge?.color)?.withOpacity(0.5), fontSize: 15.5),
                 prefixIcon: Icon(Icons.search_rounded, color: (theme.textTheme.bodyLarge?.color)?.withOpacity(0.7), size: 22),
                 suffixIcon: _aramaSorgusu.isNotEmpty
                     ? IconButton(
                   icon: Icon(Icons.clear_rounded, color: (theme.textTheme.bodyLarge?.color)?.withOpacity(0.7), size: 20),
-                  onPressed: () {
-                    _aramaController.clear();
-                  },
+                  onPressed: () => _aramaController.clear(),
                   splashRadius: 20,
-                )
-                    : null,
+                ) : null,
                 border: InputBorder.none,
                 filled: true,
                 fillColor: theme.inputDecorationTheme.fillColor ?? theme.colorScheme.surfaceVariant.withOpacity(0.08),
-                contentPadding: EdgeInsets.symmetric(vertical: 0), // Dikey content padding'i sıfırla
+                contentPadding: EdgeInsets.symmetric(vertical: 0),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25.0), // Daha yuvarlak kenarlar
+                  borderRadius: BorderRadius.circular(25.0),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
@@ -131,198 +205,154 @@ class _AraSayfasiState extends State<AraSayfasi> {
       ),
       body: Column(
         children: [
-          _buildFiltreBar(theme), // Filtre barını body'nin başına aldık
-          Expanded(child: _buildDosyaGridi(theme)),
+          _buildTemaVeSiralamaFiltreBar(theme),
+          Expanded(child: _buildGonderiListesi(theme)),
         ],
       ),
     );
   }
 
-  Widget _buildFiltreBar(ThemeData theme) {
+  Widget _buildTemaVeSiralamaFiltreBar(ThemeData theme) { /* ... _buildTemaVeSiralamaFiltreBar aynı ... */
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
       child: Row(
         children: [
-          _buildDropdownFilter(_selectedFilter, ["Tümü", "Panolarım", "Gönderiler"], (newValue) {
-            if (mounted) setState(() => _selectedFilter = newValue!);
-            // TODO: _selectedFilter'a göre _dosyalariYukle veya farklı bir metot çağrılmalı.
-            // Eğer "Gönderiler" seçilirse, _firestoreServisi.tumGonderileriGetir() gibi bir şey çağrılmalı.
-            // Şu anki _dosyalar listesi DosyaModeli içeriyor. Bu filtreleme mantığı detaylandırılmalı.
-            _dosyalariYukle();
-          }, theme),
+          Expanded(
+            child: _buildDropdown(
+              currentValue: _selectedTheme,
+              items: _temalar,
+              onChanged: (String? newValue) {
+                if (newValue != null && mounted && _selectedTheme != newValue) {
+                  setState(() => _selectedTheme = newValue);
+                  _gonderileriYukle(ilkYukleme: true);
+                }
+              },
+              theme: theme,
+              icon: Icons.filter_list_rounded,
+            ),
+          ),
           SizedBox(width: 10),
-          _buildDropdownFilter(_selectedSort, ["Son Güncelleme", "Popüler", "A-Z"], (newValue) {
-            if (mounted) setState(() => _selectedSort = newValue!);
-            // TODO: Sıralama mantığı _dosyalariYukle içinde veya lokal olarak uygulanmalı.
-            _dosyalariYukle();
-          }, theme),
+          Expanded(
+            child: _buildDropdown(
+              currentValue: _selectedSortKey,
+              items: _sortOptions.keys.toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null && mounted && _selectedSortKey != newValue) {
+                  setState(() => _selectedSortKey = newValue);
+                  _gonderileriYukle(ilkYukleme: true);
+                }
+              },
+              theme: theme,
+              icon: Icons.sort_rounded,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDropdownFilter(String currentValue, List<String> items, ValueChanged<String?> onChanged, ThemeData theme) {
-    return Expanded(
-      child: Container(
-        height: 38,
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-        decoration: BoxDecoration(
-          color: theme.inputDecorationTheme.fillColor ?? theme.colorScheme.surfaceVariant.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: currentValue,
-            dropdownColor: theme.colorScheme.surfaceVariant,
-            isExpanded: true,
-            icon: Icon(Icons.keyboard_arrow_down_rounded, color: (theme.textTheme.bodyLarge?.color)?.withOpacity(0.7), size: 20),
-            style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 13.5, fontWeight: FontWeight.w500),
-            items: items.map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value, overflow: TextOverflow.ellipsis),
-              );
-            }).toList(),
-            onChanged: onChanged,
-          ),
+  Widget _buildDropdown({ /* ... _buildDropdown aynı ... */
+    required String currentValue,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    required ThemeData theme,
+    IconData? icon,
+  }) {
+    return Container(
+      height: 38,
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+      decoration: BoxDecoration(
+        color: theme.inputDecorationTheme.fillColor ?? theme.colorScheme.surfaceVariant.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: currentValue,
+          dropdownColor: theme.colorScheme.surfaceVariant,
+          isExpanded: true,
+          icon: Icon(icon ?? Icons.keyboard_arrow_down_rounded, color: (theme.textTheme.bodyLarge?.color)?.withOpacity(0.7), size: 20),
+          style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 13.5, fontWeight: FontWeight.w500),
+          items: items.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value, overflow: TextOverflow.ellipsis),
+            );
+          }).toList(),
+          onChanged: onChanged,
         ),
       ),
     );
   }
 
-  Widget _buildDosyaGridi(ThemeData theme) {
-    if (_isLoading) {
+  Widget _buildGonderiListesi(ThemeData theme) {
+    final List<Gonderi> gosterilecek = _gosterilecekGonderiler;
+
+    if (_isLoading && gosterilecek.isEmpty) {
       return Center(child: CircularProgressIndicator(color: theme.colorScheme.primary));
     }
-    final gosterilecekDosyalar = _filtrelenmisDosyalar;
-    if (gosterilecekDosyalar.isEmpty) {
-      return Center(
+
+    if (gosterilecek.isEmpty && !_isLoading) {
+      String mesaj = "Keşfedilecek gönderi bulunamadı.";
+      if (_aramaSorgusu.isNotEmpty) {
+        mesaj = "'$_aramaSorgusu' için sonuç bulunamadı.";
+      } else {
+        mesaj = "$_selectedTheme temasında henüz gönderi yok.\nFarklı bir tema veya sıralama seçmeyi dene!";
+      }
+      return Center( /* ... Mesaj kısmı aynı ... */
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Text(
-            _aramaSorgusu.isNotEmpty ? "'$_aramaSorgusu' için sonuç bulunamadı." : "Keşfedilecek içerik bulunamadı.\nFarklı bir şeyler aramayı dene!",
+            mesaj,
             textAlign: TextAlign.center,
             style: TextStyle(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6), fontSize: 16, height: 1.4),
           ),
         ),
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(12.0, 0, 12.0, 12.0),
-      itemCount: gosterilecekDosyalar.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // Sütun sayısı
-        crossAxisSpacing: 10.0,
-        mainAxisSpacing: 10.0,
-        childAspectRatio: 0.75, // Kartların en-boy oranı (daha dikey)
-      ),
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.only(top: 0, bottom: 12.0),
+      itemCount: gosterilecek.length + (_dahaFazlaYukleniyor ? 1 : 0),
       itemBuilder: (context, index) {
-        final dosya = gosterilecekDosyalar[index];
-        return _buildDosyaKarti(dosya, theme);
-      },
-    );
-  }
+        if (index == gosterilecek.length) {
+          return _dahaFazlaYukleniyor
+              ? Center(child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: theme.colorScheme.primary),
+          ))
+              : SizedBox.shrink();
+        }
 
-  Widget _buildDosyaKarti(DosyaModeli dosya, ThemeData theme) {
-    List<String> kapakResimleri = dosya.kapakResimleri;
-    if (kapakResimleri.isEmpty) {
-      kapakResimleri = [""]; // Placeholder için tek boş string
-    }
-
-    Widget resimGrubu;
-    // ... (resimGrubu oluşturma mantığı aynı, _buildKapakResmi'ne theme geçilecek)
-    if (kapakResimleri.length >= 4) {
-      resimGrubu = Column(children: [ Expanded(child: Row(children: [ Expanded(child: _buildKapakResmi(kapakResimleri[0], theme, topLeft: true)), Expanded(child: _buildKapakResmi(kapakResimleri[1], theme, topRight: true)), ])), Expanded(child: Row(children: [ Expanded(child: _buildKapakResmi(kapakResimleri[2], theme, bottomLeft: true)), Expanded(child: _buildKapakResmi(kapakResimleri[3], theme, bottomRight: true)), ])), ]);
-    } else if (kapakResimleri.length == 3) {
-      resimGrubu = Column(children: [ Expanded(child: Row(children: [ Expanded(child: _buildKapakResmi(kapakResimleri[0], theme, topLeft: true)), Expanded(child: _buildKapakResmi(kapakResimleri[1], theme, topRight: true)), ])), Expanded(child: _buildKapakResmi(kapakResimleri[2], theme, bottomLeft: true, bottomRight: true)), ]);
-    } else if (kapakResimleri.length == 2) {
-      resimGrubu = Row(children: [ Expanded(child: _buildKapakResmi(kapakResimleri[0], theme, topLeft: true, bottomLeft: true)), Expanded(child: _buildKapakResmi(kapakResimleri[1], theme, topRight: true, bottomRight: true)), ]);
-    } else { resimGrubu = _buildKapakResmi(kapakResimleri[0], theme, allCorners: true); }
-
-
-    return GestureDetector(
-      onTap: () {
-        // DosyaDetaySayfasi'nı kullanmayacağımız için bu yönlendirmeyi kaldırıyoruz.
-        // Kullanıcı bir "Dosya" kartına tıkladığında ne olacağına karar vermeliyiz.
-        // Şimdilik sadece print yapalım.
-        print("Dosya kartı tıklandı: ${dosya.ad} (ID: ${dosya.id})");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${dosya.ad} dosyası tıklandı. (Detay sayfası devredışı)")),
+        final gonderi = gosterilecek[index];
+        // WIDGET ÇAĞRISI VE PARAMETRE GEÇİŞİ DÜZELTİLDİ
+        return ContentCard( // <--- DEĞİŞTİ
+          key: ValueKey(gonderi.id + (_aktifKullaniciId ?? "")),
+          gonderiId: gonderi.id,
+          resimUrls: gonderi.resimUrls,
+          profileUrl: gonderi.yayinlayanKullanici?.fotoUrl ?? "",
+          userName: gonderi.yayinlayanKullanici?.kullaniciAdi ?? "Bilinmeyen Kullanıcı",
+          location: gonderi.konum ?? "Konum Belirtilmemiş",
+          description: gonderi.aciklama, // ContentCard 'String?' kabul ediyor
+          category: gonderi.kategori,   // ContentCard 'String?' kabul ediyor
+          initialLikeCount: gonderi.begeniSayisi,
+          initialCommentCount: gonderi.yorumSayisi,
+          aktifKullaniciId: _aktifKullaniciId ?? "",
+          onProfileTap: () {
+            print("Profil tıklandı: ${gonderi.kullaniciId}");
+            // TODO: Profil sayfasına yönlendirme
+          },
+          onCommentTap: (gonderiId) {
+            print("Yorumlar tıklandı: $gonderiId");
+            // TODO: Yorumlar sayfasına/dialog'una yönlendirme
+          },
+          onDetailsTap: () {
+            print("Detaylar tıklandı: ${gonderi.id}");
+            // TODO: Gönderi detay sayfasına yönlendirme
+          },
+          // Diğer callback'ler (onShareTap, onMoreTap) ContentCard'da tanımlıysa buraya eklenebilir.
         );
-        // İLERİDE: Belki bu dosyaya ait gönderileri Akis sayfasında filtreleyerek gösterebiliriz.
-        // Örneğin: Navigator.push(context, MaterialPageRoute(builder: (_) => Akis(dosyaIdFiltresi: dosya.id)));
-        // Bu, Akis widget'ının böyle bir filtreyi kabul etmesini gerektirir.
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12.0),
-              child: Container(
-                // color: theme.colorScheme.surfaceVariant.withOpacity(0.05),
-                child: resimGrubu,
-              ),
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            dosya.ad,
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          SizedBox(height: 2),
-          Row(
-            children: [
-              Text(
-                "${dosya.gonderiSayisi} gönderi",
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.textTheme.bodySmall?.color?.withOpacity(0.7)),
-              ),
-              if (dosya.sonGuncelleme != null) ...[
-                SizedBox(width: 4),
-                Text("·", style: TextStyle(color: theme.textTheme.bodySmall?.color?.withOpacity(0.7), fontSize: 12.5)),
-                SizedBox(width: 4),
-                Text(
-                  _formatRelativeTime(dosya.sonGuncelleme!),
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.textTheme.bodySmall?.color?.withOpacity(0.7)),
-                ),
-              ],
-              // if(dosya.gizliMi) // Gizlilik ikonu, eğer dosyalar için böyle bir özellik varsa
-              //   Padding(
-              //     padding: const EdgeInsets.only(left: 6.0),
-              //     child: Icon(Icons.lock_outline, color: theme.iconTheme.color?.withOpacity(0.6), size: 14),
-              //   )
-            ],
-          ),
-        ],
-      ),
     );
-  }
-
-  Widget _buildKapakResmi(String url, ThemeData theme, {bool topLeft = false, bool topRight = false, bool bottomLeft = false, bool bottomRight = false, bool allCorners = false}) {
-    bool isValidUrl = url.isNotEmpty && (Uri.tryParse(url)?.hasAbsolutePath ?? false);
-    return Container(
-      margin: EdgeInsets.all(0.5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(allCorners || topLeft ? 6.0 : 0.0),
-          topRight: Radius.circular(allCorners || topRight ? 6.0 : 0.0),
-          bottomLeft: Radius.circular(allCorners || bottomLeft ? 6.0 : 0.0),
-          bottomRight: Radius.circular(allCorners || bottomRight ? 6.0 : 0.0),
-        ),
-        image: isValidUrl ? DecorationImage(
-          image: NetworkImage(url),
-          fit: BoxFit.cover,
-          onError: (exception, stackTrace) {},
-        ) : null,
-        color: !isValidUrl ? theme.colorScheme.surfaceVariant.withOpacity(0.15) : null, // Placeholder rengi biraz daha belirgin
-      ),
-      child: !isValidUrl ? Center(child: Icon(Icons.photo_library_outlined, color: theme.iconTheme.color?.withOpacity(0.4), size: 24)) : null, // İkon değiştirildi
-    );
-  }
-
-  String _formatRelativeTime(DateTime dateTime) {
-    final now = DateTime.now(); final difference = now.difference(dateTime); if (difference.inDays > 30 * 2) { return DateFormat('dd MMM yyyy', 'tr_TR').format(dateTime); } else if (difference.inDays > 6) { int weeks = (difference.inDays / 7).floor(); return "$weeks hf önce"; } else if (difference.inDays > 0) { return "${difference.inDays} g önce"; } else if (difference.inHours > 0) { return "${difference.inHours} sa önce"; } else if (difference.inMinutes > 0) { return "${difference.inMinutes} dk önce"; } else { return "şimdi"; }
   }
 }
