@@ -195,7 +195,7 @@ class YetkilendirmeServisi {
   }
 
   // YENİ EKLENEN METOD
-  Future<void> aktifKullaniciGuncelleVeYenidenYukle() async {
+  Future<void> aktifKullaniciGuncelleVeYenidenYukle(Kullanici guncellenmisKullanici) async {
     if (_aktifKullaniciId != null) {
       print("YetkilendirmeServisi: Aktif kullanıcı detayları yeniden yükleniyor (ID: $_aktifKullaniciId)...");
       await _aktifKullaniciDetaylariniYukle(_aktifKullaniciId!);

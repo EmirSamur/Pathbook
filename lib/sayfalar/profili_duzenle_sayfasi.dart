@@ -162,7 +162,7 @@ class _ProfiliDuzenleSayfasiState extends State<ProfiliDuzenleSayfasi> {
         print("Kullanıcı başarıyla güncellendi.");
 
         // 3. YetkilendirmeServisi'ndeki aktifKullanici'yı güncelle
-        _yetkilendirmeServisi.aktifKullaniciGuncelleVeYenidenYukle();
+        _yetkilendirmeServisi.aktifKullaniciGuncelleVeYenidenYukle;
 
 
         ScaffoldMessenger.of(context).showSnackBar(

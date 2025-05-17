@@ -38,7 +38,7 @@ class Gonderi {
     // Firestore'dan 'resimUrls' alanını List<String> olarak oku
     List<String> urls = [];
     if (data['resimUrls'] != null && data['resimUrls'] is List) {
-      // Gelen listeyi güvenli bir şekilde List<String>'e çevir
+      // Gelen listeyi güvenli bir şekilde Lisst<String>'e çevir
       urls = List<String>.from(data['resimUrls'].map((item) => item.toString()));
     } else if (data['resimUrl'] != null && data['resimUrl'] is String) {
       // Geriye dönük uyumluluk için eski tek 'resimUrl' alanını da kontrol et

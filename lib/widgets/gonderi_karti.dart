@@ -6,7 +6,7 @@ import 'package:pathbooks/servisler/firestoreseervisi.dart';
 
 class ContentCard extends StatefulWidget {
   final String gonderiId;
-  final List<String> resimUrls; // DEĞİŞTİ: Tek URL yerine URL listesi
+  final List<String> resimUrls;
   final String profileUrl;
   final String userName;
   final String location;
@@ -25,7 +25,7 @@ class ContentCard extends StatefulWidget {
   const ContentCard({
     Key? key,
     required this.gonderiId,
-    required this.resimUrls, // DEĞİŞTİ
+    required this.resimUrls,
     required this.profileUrl,
     required this.userName,
     required this.location,
@@ -52,6 +52,9 @@ class _ContentCardState extends State<ContentCard> {
   int _likeCount = 0;
   int _commentCount = 0;
   bool _isLiking = false;
+
+  static const double _smallIconSize = 18.0;
+  static const double _actionButtonIconSize = 20.0;
 
   @override
   void initState() {
@@ -122,7 +125,6 @@ class _ContentCardState extends State<ContentCard> {
         aktifKullaniciId: widget.aktifKullaniciId,
       );
     } catch (e) {
-      print("ContentCard - Beğeni toggle hatası: $e");
       if (mounted) {
         setState(() {
           _isLiked = !_isLiked;
@@ -140,130 +142,145 @@ class _ContentCardState extends State<ContentCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Gösterilecek ana resim URL'si (listenin ilki, eğer liste boş değilse)
+    final TextTheme textTheme = theme.textTheme;
     String? anaResimUrl;
     if (widget.resimUrls.isNotEmpty) {
       anaResimUrl = widget.resimUrls[0];
     }
 
+    final TextStyle? smallBodyStyle = textTheme.bodySmall?.copyWith(fontSize: 11.5);
+    final TextStyle? verySmallLabelStyle = textTheme.labelSmall?.copyWith(fontSize: 10.5);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      // Dış Padding: Kartlar arası dikey boşluk için. Alt boşluk azaltıldı.
+      padding: EdgeInsets.only(top: 6.0, bottom: 4.0), // ESKİ: symmetric(vertical: 6.0)
       child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 12.0),
-        elevation: 2.0, // Önceki saydamlık denemesinden kalma, isteğe bağlı
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+        margin: const EdgeInsets.symmetric(horizontal: 10.0),
+        elevation: 1.5,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
         clipBehavior: Clip.antiAlias,
-        color: (theme.cardTheme.color ?? theme.cardColor).withOpacity(0.85), // Önceki saydamlık denemesi
+        color: (theme.cardTheme.color ?? theme.cardColor).withOpacity(0.9),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             // 1. Kullanıcı Başlığı
             Padding(
-              padding: const EdgeInsets.fromLTRB(12.0, 12.0, 8.0, 8.0),
-              child: Row( /* ... (Kullanıcı başlığı aynı) ... */
+              padding: const EdgeInsets.fromLTRB(10.0, 10.0, 6.0, 6.0),
+              child: Row( /* ... (içerik aynı) ... */
                 children: <Widget>[
                   GestureDetector(
                     onTap: widget.onProfileTap,
                     child: CircleAvatar(
-                      radius: 20,
+                      radius: 18,
                       backgroundColor: theme.colorScheme.surfaceVariant,
                       backgroundImage: widget.profileUrl.isNotEmpty ? NetworkImage(widget.profileUrl) : null,
-                      child: widget.profileUrl.isEmpty ? Icon(Icons.person, size: 22, color: theme.colorScheme.onSurfaceVariant) : null,
+                      child: widget.profileUrl.isEmpty ? Icon(Icons.person, size: 20, color: theme.colorScheme.onSurfaceVariant) : null,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       widget.userName,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: 13.5),
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.more_vert, color: theme.iconTheme.color?.withOpacity(0.8)),
-                    onPressed: widget.onMoreTap ?? () { print("More tıklandı: ${widget.gonderiId}"); },
-                    splashRadius: 20,
+                    icon: Icon(Icons.more_vert, color: theme.iconTheme.color?.withOpacity(0.7), size: 20),
+                    onPressed: widget.onMoreTap ?? () {},
+                    splashRadius: 18,
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(),
                     tooltip: "Daha fazla seçenek",
                   ),
                 ],
               ),
             ),
 
-            // 2. Gönderi Görseli ve Çoklu Resim Göstergesi
-            if (anaResimUrl != null) // Sadece ana resim varsa göster
-              GestureDetector(
+            // 2. Gönderi Görseli
+            AspectRatio(
+              aspectRatio: 1 / 1,
+              child: anaResimUrl != null
+                  ? GestureDetector( /* ... (içerik aynı) ... */
                 onDoubleTap: _isLiking ? null : _toggleLike,
                 onTap: widget.onDetailsTap,
-                child: Stack( // Görseli ve göstergeyi üst üste bindirmek için Stack
+                child: Stack(
                   alignment: Alignment.topRight,
                   children: [
-                    AspectRatio(
-                      aspectRatio: 1/1, // Görselin dikey oranı (isteğe bağlı değiştirilebilir)
-                      child: Image.network(
-                        anaResimUrl, // Ana görsel olarak ilk resmi göster
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
-                        },
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-                          child: Center(child: Icon(Icons.broken_image_outlined, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7), size: 60)),
-                        ),
+                    Image.network(
+                      anaResimUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.2), child: const Center(child: CircularProgressIndicator(strokeWidth: 2.0)));
+                      },
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+                        child: Center(child: Icon(Icons.broken_image_outlined, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6), size: 50)),
                       ),
                     ),
-                    // Çoklu resim göstergesi (eğer birden fazla resim varsa)
                     if (widget.resimUrls.length > 1)
                       Positioned(
-                        top: 8.0,
-                        right: 8.0,
-                        child: Container( // Chip yerine Container + Text ile daha sade bir görünüm
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        top: 6.0,
+                        right: 6.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 3.0),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.65),
-                            borderRadius: BorderRadius.circular(8.0),
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(6.0),
                           ),
                           child: Text(
                             "${widget.resimUrls.length} resim",
-                            style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500),
+                            style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w500),
                           ),
                         ),
                       ),
                   ],
                 ),
               )
-            else
-              Container( // Görsel yoksa placeholder
-                height: MediaQuery.of(context).size.width * (4 / 3), // Orana göre bir yükseklik
+                  : Container(
                 color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                child: Center(child: Icon(Icons.image_not_supported_outlined, size: 50, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6))),
+                child: Center(child: Icon(Icons.image_not_supported_outlined, size: 45, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6))),
               ),
+            ),
 
             // 3. Konum ve Kategori
             Padding(
-              padding: const EdgeInsets.fromLTRB(12.0, 10.0, 12.0, 6.0),
-              child: Wrap( /* ... (Konum ve Kategori aynı) ... */
-                spacing: 8.0, runSpacing: 4.0, crossAxisAlignment: WrapCrossAlignment.center,
+              padding: const EdgeInsets.fromLTRB(10.0, 8.0, 10.0, 4.0),
+              child: Wrap( /* ... (içerik aynı) ... */
+                spacing: 6.0,
+                runSpacing: 2.0,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   if (widget.location.isNotEmpty)
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.location_on_outlined, size: 18, color: theme.colorScheme.secondary),
-                        const SizedBox(width: 4),
-                        Flexible(child: Text(widget.location, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+                        Icon(Icons.location_on_outlined, size: _smallIconSize - 2, color: theme.colorScheme.secondary),
+                        const SizedBox(width: 3),
+                        Flexible(
+                          child: Text(
+                            widget.location,
+                            style: smallBodyStyle?.copyWith(fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
                       ],
                     ),
                   if (widget.category != null && widget.category!.isNotEmpty)
                     Chip(
-                      avatar: Icon(_getCategoryIcon(widget.category!), size: 16, color: theme.colorScheme.onSecondaryContainer),
+                      avatar: Icon(_getCategoryIcon(widget.category!), size: _smallIconSize - 4, color: theme.colorScheme.onSecondaryContainer.withOpacity(0.8)),
                       label: Text(widget.category!),
-                      labelStyle: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSecondaryContainer),
-                      backgroundColor: theme.colorScheme.secondaryContainer.withOpacity(0.8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      labelStyle: verySmallLabelStyle?.copyWith(color: theme.colorScheme.onSecondaryContainer, fontWeight: FontWeight.w500),
+                      backgroundColor: theme.colorScheme.secondaryContainer.withOpacity(0.7),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 0.5),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
                     ),
                 ],
               ),
@@ -272,68 +289,115 @@ class _ContentCardState extends State<ContentCard> {
             // 4. Açıklama Kırpıntısı
             if (widget.description != null && widget.description!.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 8.0),
-                child: GestureDetector( /* ... (Açıklama aynı) ... */
+                padding: const EdgeInsets.fromLTRB(10.0, 0.0, 10.0, 6.0),
+                child: GestureDetector( /* ... (içerik aynı) ... */
                   onTap: widget.onDetailsTap,
                   child: RichText(
                     text: TextSpan(
-                      style: theme.textTheme.bodyMedium,
+                      style: smallBodyStyle,
                       children: <TextSpan>[
-                        TextSpan(text: widget.description!.length > 100 ? widget.description!.substring(0, 100) : widget.description!),
-                        if (widget.description!.length > 100)
-                          TextSpan(text: "... daha fazla gör", style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+                        TextSpan(text: widget.description!.length > 65 ? widget.description!.substring(0, 65) : widget.description!),
+                        if (widget.description!.length > 65)
+                          TextSpan(text: "...", style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
                       ],
                     ),
-                    maxLines: 3, overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
 
-            Divider(height: 1, thickness: 0.5, indent: 12, endIndent: 12),
+            if ((widget.description != null && widget.description!.isNotEmpty))
+              Divider(height: 0.5, thickness: 0.3, indent: 10, endIndent: 10, color: theme.dividerColor.withOpacity(0.5)),
 
             // 5. Etkileşim Butonları
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 0.0), // Dikey padding 0 yapıldı
-              child: Row( /* ... (Etkileşim butonları aynı, padding düzenlemeleri uygulanmıştı) ... */
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.fromLTRB(2.0, 2.0, 2.0, 2.0), // Dikey padding çok az eklendi, simetri için
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: <Widget>[
-                  TextButton.icon(
-                    icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, color: _isLiked ? theme.colorScheme.error : theme.iconTheme.color, size: 22),
-                    label: Text(_likeCount > 0 ? _likeCount.toString() : "Beğen", style: theme.textTheme.labelLarge),
+                  _buildActionButton(
+                    context: context,
+                    icon: _isLiked ? Icons.favorite : Icons.favorite_border,
+                    label: _likeCount > 0 ? _likeCount.toString() : "Beğen",
+                    color: _isLiked ? theme.colorScheme.error : theme.iconTheme.color,
                     onPressed: _isLiking ? null : _toggleLike,
-                    style: TextButton.styleFrom(foregroundColor: theme.textTheme.labelLarge?.color, padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                    textStyle: verySmallLabelStyle,
                   ),
-                  TextButton.icon(
-                    icon: Icon(Icons.chat_bubble_outline_rounded, size: 22, color: theme.iconTheme.color),
-                    label: Text(_commentCount > 0 ? _commentCount.toString() : "Yorum", style: theme.textTheme.labelLarge),
+                  _buildActionButton(
+                    context: context,
+                    icon: Icons.chat_bubble_outline_rounded,
+                    label: _commentCount > 0 ? _commentCount.toString() : "Yorum",
                     onPressed: () => widget.onCommentTap?.call(widget.gonderiId),
-                    style: TextButton.styleFrom(foregroundColor: theme.textTheme.labelLarge?.color, padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                    textStyle: verySmallLabelStyle,
                   ),
-                  IconButton(
-                    icon: Icon(Icons.read_more_outlined, size: 24, color: theme.iconTheme.color),
-                    onPressed: widget.onDetailsTap, tooltip: "Detayları Gör", padding: EdgeInsets.zero, constraints: BoxConstraints(),
+                  _buildActionButton(
+                    context: context,
+                    icon: Icons.read_more_outlined,
+                    label: "Detay",
+                    onPressed: widget.onDetailsTap,
+                    textStyle: verySmallLabelStyle,
                   ),
-                  IconButton(
-                    icon: Icon(Icons.send_outlined, size: 24, color: theme.iconTheme.color),
-                    onPressed: widget.onShareTap, tooltip: "Paylaş", padding: EdgeInsets.zero, constraints: BoxConstraints(),
+                  _buildActionButton(
+                    context: context,
+                    icon: Icons.send_outlined,
+                    label: "Paylaş",
+                    onPressed: widget.onShareTap,
+                    textStyle: verySmallLabelStyle,
                   ),
                 ],
               ),
             ),
-            // En alttaki SizedBox kaldırılmıştı, bu şekilde boşluk daha az olmalı.
+            // SizedBox(height: 4) KALDIRILDI.
+            // Eğer kartın altında hala çok az boşluk isteniyorsa (örn: 2px), buraya eklenebilir.
+            // Şimdilik en sıkı haliyle bırakıyorum.
           ],
         ),
       ),
     );
   }
 
+  Widget _buildActionButton({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    Color? color,
+    VoidCallback? onPressed,
+    TextStyle? textStyle,
+  }) {
+    final theme = Theme.of(context);
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: color ?? theme.iconTheme.color,
+        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 3), // Dikey padding biraz artırıldı
+        minimumSize: Size(40, 36), // Minimum yükseklik ayarlandı
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: _actionButtonIconSize - 2, color: color ?? theme.iconTheme.color),
+          if (label.isNotEmpty) SizedBox(height: 2), // İkon ve metin arası
+          if (label.isNotEmpty)
+            Text(
+              label,
+              style: textStyle?.copyWith(color: color ?? theme.textTheme.bodySmall?.color) ??
+                  theme.textTheme.labelSmall?.copyWith(color: color ?? theme.textTheme.bodySmall?.color, fontSize: 9.5),
+              textAlign: TextAlign.center, // Metin ortalansın
+            ),
+        ],
+      ),
+    );
+  }
+
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
-      case 'doğa': return Icons.eco_outlined;
-      case 'tarih': return Icons.account_balance_outlined;
-      case 'kültür': return Icons.palette_outlined;
-      case 'yeme-içme': return Icons.restaurant_menu_outlined;
-      default: return Icons.label_outline;
+      case 'doğa': return Icons.filter_hdr_outlined;
+      case 'tarih': return Icons.museum_outlined;
+      case 'kültür': return Icons.color_lens_outlined;
+      case 'yeme-içme': return Icons.local_cafe_outlined;
+      default: return Icons.label_important_outline_rounded;
     }
   }
 }

@@ -399,7 +399,7 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
                       style: TextStyle(color: onSurfaceColor, fontSize: 16),
                       maxLines: 4,
                       minLines: 2,
-                      maxLength: 250,
+                      maxLength: 500,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
                         hintText: "Açıklamanı yaz...",

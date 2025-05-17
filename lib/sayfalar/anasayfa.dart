@@ -11,7 +11,7 @@ import 'package:pathbooks/sayfalar/yukle.dart';
 import 'package:pathbooks/sayfalar/akis.dart';
 import 'package:pathbooks/sayfalar/ara.dart';
 import 'package:pathbooks/sayfalar/duyurular.dart';
-import 'package:pathbooks/sayfalar/gelen_kutusu_sayfasi.dart'; // Gelen Kutusu importu
+import 'package:pathbooks/sayfalar/gelen_kutusu_sayfasi.dart';
 
 class Anasayfa extends StatefulWidget {
   final Kullanici aktifKullanici;
@@ -34,8 +34,8 @@ class _AnasayfaState extends State<Anasayfa> {
   late FirestoreServisi _firestoreServisi;
   List<OneriModeli> _onerilerListesi = [];
   OneriModeli? _gosterilecekOneri;
-  OneriModeli? _sonGosterilenDuyuruKutusuOnerisi; // Son gösterileni saklamak için
-  bool _onerilerYukleniyor = true;
+  OneriModeli? _sonGosterilenDuyuruKutusuOnerisi;
+  // bool _onerilerYukleniyor = true; // Artık doğrudan kullanılmıyor gibi
   final Random _random = Random();
   Timer? _duyuruTimer;
 
@@ -47,47 +47,51 @@ class _AnasayfaState extends State<Anasayfa> {
       _aktifKullaniciProfilFotoUrl = widget.aktifKullanici.fotoUrl;
     }
     _firestoreServisi = Provider.of<FirestoreServisi>(context, listen: false);
-    _onerileriCekVeGoster();
+    _fetchSuggestionWhenNeeded(); // initState'te ve sayfa değişiminde çağrılacak
   }
 
-  Future<void> _onerileriCekVeGoster() async {
+  Future<void> _fetchSuggestionWhenNeeded() async {
     if (!mounted) return;
-    if (_gosterilecekOneri != null) return; // Zaten bir öneri gösteriliyorsa tekrar çekme
 
-    setState(() {
-      _onerilerYukleniyor = true;
-      // _gosterilecekOneri = null; // Zaten yukarıdaki if ile kontrol ediliyor
-    });
-    _duyuruTimer?.cancel();
-
-    try {
-      if (_onerilerListesi.isEmpty) {
-        _onerilerListesi = await _firestoreServisi.tumOnerileriGetir();
-      }
-
-      if (_onerilerListesi.isNotEmpty) {
-        final int randomIndex = _random.nextInt(_onerilerListesi.length);
-        if (mounted) {
-          setState(() {
-            _gosterilecekOneri = _onerilerListesi[randomIndex];
-            _sonGosterilenDuyuruKutusuOnerisi = _gosterilecekOneri; // Son gösterileni sakla
-            _onerilerYukleniyor = false;
-          });
-
-          _duyuruTimer = Timer(const Duration(seconds: 5), () {
+    if (_aktifSayfaNo == 0) { // Sadece Akış sayfasındayken
+      if (_gosterilecekOneri == null) { // Ve zaten bir öneri gösterilmiyorsa
+        // setState(() { _onerilerYukleniyor = true; }); // İsteğe bağlı
+        _duyuruTimer?.cancel();
+        try {
+          if (_onerilerListesi.isEmpty) {
+            _onerilerListesi = await _firestoreServisi.tumOnerileriGetir();
+          }
+          if (_onerilerListesi.isNotEmpty) {
+            final int randomIndex = _random.nextInt(_onerilerListesi.length);
             if (mounted) {
               setState(() {
-                _gosterilecekOneri = null;
+                _gosterilecekOneri = _onerilerListesi[randomIndex];
+                _sonGosterilenDuyuruKutusuOnerisi = _gosterilecekOneri;
+                // _onerilerYukleniyor = false;
+              });
+              _duyuruTimer = Timer(const Duration(seconds: 5), () {
+                if (mounted) {
+                  setState(() {
+                    _gosterilecekOneri = null;
+                  });
+                }
               });
             }
-          });
+          } else {
+            // if (mounted) setState(() => _onerilerYukleniyor = false);
+          }
+        } catch (e) {
+          print("Anasayfa - Öneriler çekilirken hata: $e");
+          // if (mounted) setState(() => _onerilerYukleniyor = false);
         }
-      } else {
-        if (mounted) setState(() => _onerilerYukleniyor = false);
       }
-    } catch (e) {
-      print("Anasayfa - Öneriler çekilirken hata: $e");
-      if (mounted) setState(() => _onerilerYukleniyor = false);
+    } else { // Akış sayfasında değilsek, mevcut öneriyi ve timer'ı temizle
+      _duyuruTimer?.cancel();
+      if (mounted && _gosterilecekOneri != null) {
+        setState(() {
+          _gosterilecekOneri = null;
+        });
+      }
     }
   }
 
@@ -108,7 +112,7 @@ class _AnasayfaState extends State<Anasayfa> {
           child: SizeTransition(
             sizeFactor: animation,
             axis: Axis.vertical,
-            axisAlignment: -1.0, // Üstten aşağı doğru açılma
+            axisAlignment: -1.0,
             child: child,
           ),
         );
@@ -118,7 +122,7 @@ class _AnasayfaState extends State<Anasayfa> {
           : Material(
         key: ValueKey(_gosterilecekOneri!.id),
         color: theme.cardTheme.color ?? theme.colorScheme.surfaceVariant,
-        elevation: 2.0,
+        elevation: 1.0, // Hafif bir gölge
         child: InkWell(
           onTap: () {
             _duyuruTimer?.cancel();
@@ -138,23 +142,23 @@ class _AnasayfaState extends State<Anasayfa> {
           child: Container(
             width: double.infinity,
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 12.0,
-              bottom: 12.0,
+              top: MediaQuery.of(context).padding.top + 10.0, // Status bar + iç padding
+              bottom: 10.0,
               left: 16.0,
               right: 16.0,
             ),
-            constraints: BoxConstraints(minHeight: 70),
+            constraints: BoxConstraints(minHeight: 60), // Biraz daha kompakt
             child: Row(
               children: [
                 if (_gosterilecekOneri!.gorselUrl != null && _gosterilecekOneri!.gorselUrl!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(right: 12.0),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8.0),
+                      borderRadius: BorderRadius.circular(6.0),
                       child: Image.network(
                         _gosterilecekOneri!.gorselUrl!,
-                        width: 40, height: 40, fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(Icons.image_not_supported, size: 30, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                        width: 36, height: 36, fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Icon(Icons.image_not_supported, size: 28, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
                       ),
                     ),
                   ),
@@ -165,19 +169,19 @@ class _AnasayfaState extends State<Anasayfa> {
                     children: [
                       Text(
                         _gosterilecekOneri!.yerAdi,
-                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant),
+                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
                         maxLines: 1, overflow: TextOverflow.ellipsis,
                       ),
-                      SizedBox(height: 2),
+                      SizedBox(height: 1),
                       Text(
                         _gosterilecekOneri!.ipucuMetni,
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8)),
+                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8), fontSize: 11),
                         maxLines: 2, overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios, size: 16, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7)),
+                Icon(Icons.arrow_forward_ios, size: 14, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7)),
               ],
             ),
           ),
@@ -191,7 +195,7 @@ class _AnasayfaState extends State<Anasayfa> {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 8), // Yüksekliği ayarlayabilirsiniz
           decoration: BoxDecoration(
             color: isSelected ? theme.colorScheme.primary : theme.colorScheme.surface.withOpacity(0.7),
             borderRadius: BorderRadius.circular(8),
@@ -201,44 +205,47 @@ class _AnasayfaState extends State<Anasayfa> {
             label,
             textAlign: TextAlign.center,
             style: (isSelected
-                ? theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onPrimary)
-                : theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.8))
-            )?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, fontSize: 13),
+                ? theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onPrimary) // labelMedium
+                : theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.8), fontSize: 12) // Biraz daha küçük
+            )?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPageHeader(BuildContext context) {
+  // Bu metot artık Positioned döndürmüyor, direkt Column'un bir parçası olacak.
+  Widget _buildDynamicPageHeader(BuildContext context) {
     final theme = Theme.of(context);
-    if (_aktifSayfaNo == 0) {
-      return Positioned(
-        top: 0, left: 0, right: 0,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDuyuruKutusu(context),
-            Container(
-              color: theme.appBarTheme.backgroundColor?.withOpacity(0.95) ?? Colors.black.withOpacity(0.8),
-              padding: EdgeInsets.only(
-                top: (_gosterilecekOneri == null) ? MediaQuery.of(context).padding.top + 8.0 : 8.0,
-                bottom: 8.0, left: 16, right: 16,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildFilterChip("Keşfet", _selectedFilterInAkis == 0, () => setState(() => _selectedFilterInAkis = 0), theme),
-                  const SizedBox(width: 10),
-                  _buildFilterChip("Takip Edilenler", _selectedFilterInAkis == 1, () => setState(() => _selectedFilterInAkis = 1), theme),
-                ],
-              ),
-            ),
-          ],
+    // Bu Column, _buildDuyuruKutusu ve filtreleri içerir.
+    // Kendi padding'lerini ve yüksekliklerini yönetirler.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildDuyuruKutusu(context), // Bu, içinde status bar için padding içeriyor
+        Container( // Filtreler
+          color: theme.appBarTheme.backgroundColor?.withOpacity(0.95) ?? Colors.black.withOpacity(0.85),
+          padding: EdgeInsets.only(
+            // Eğer _buildDuyuruKutusu görünmüyorsa (SizedBox.shrink ise),
+            // filtrelerin üst padding'i status bar'ı içermeli.
+            // _buildDuyuruKutusu göründüğünde, o zaten status bar'ı hallettiği için
+            // filtrelerin sadece kendi iç padding'i (örn: 8.0) yeterli.
+            top: (_gosterilecekOneri == null) ? MediaQuery.of(context).padding.top + 8.0 : 8.0,
+            bottom: 8.0,
+            left: 16.0,
+            right: 16.0,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildFilterChip("Keşfet", _selectedFilterInAkis == 0, () => setState(() => _selectedFilterInAkis = 0), theme),
+              const SizedBox(width: 10),
+              _buildFilterChip("Takip Edilenler", _selectedFilterInAkis == 1, () => setState(() => _selectedFilterInAkis = 1), theme),
+            ],
+          ),
         ),
-      );
-    }
-    return const SizedBox.shrink();
+      ],
+    );
   }
 
   @override
@@ -246,78 +253,42 @@ class _AnasayfaState extends State<Anasayfa> {
     final theme = Theme.of(context);
 
     final List<Widget> _sayfalar = [
-      Akis(selectedFilter: _selectedFilterInAkis),
+      Akis(selectedFilter: _selectedFilterInAkis), // Akis'e ekstra padding parametresi GEÇİLMİYOR
       const AraSayfasi(),
       GonderiEkleSayfasi(),
-      GelenKutusuSayfasi(sonOneri: _sonGosterilenDuyuruKutusuOnerisi), // Gelen Kutusu sayfası
+      GelenKutusuSayfasi(sonOneri: _sonGosterilenDuyuruKutusuOnerisi),
       Profil(aktifKullanici: widget.aktifKullanici),
     ];
 
-    // Header'ın yaklaşık yüksekliğini hesaplama (DİKKATLİCE AYARLANMALI)
-    double topPaddingForPageView = 0;
-    if (_aktifSayfaNo == 0) {
-      double filterHeight = 56.0; // Filtrelerin yaklaşık yüksekliği (paddingler dahil)
-      if (_gosterilecekOneri != null) {
-        // Duyuru kutusu varken (yaklaşık 70-90px + status bar) + filtreler
-        topPaddingForPageView = (MediaQuery.of(context).padding.top + 80.0) + filterHeight - MediaQuery.of(context).padding.top ; //Duyuru+filtre - status_bar (çünkü filtreler duyurunun altında)
-      } else {
-        // Sadece filtreler varken (status bar + filtreler)
-        topPaddingForPageView = MediaQuery.of(context).padding.top + filterHeight;
-      }
-    }
-    // En basit haliyle sabit bir padding vermek daha az sorunlu olabilir başlangıçta.
-    // Ya da header'ı bir `PreferredSizeWidget` yapıp AppBar gibi kullanmak.
-    // Şimdilik örnek bir padding:
-    if (_aktifSayfaNo == 0) {
-      topPaddingForPageView = 56.0; // Filtrelerin yüksekliği
-      if (_gosterilecekOneri != null) {
-        topPaddingForPageView += (MediaQuery.of(context).padding.top + 80); // Duyuru yüksekliği + status bar
-      } else {
-        topPaddingForPageView += MediaQuery.of(context).padding.top; // Sadece status bar
-      }
-    }
-
-
     return Scaffold(
-      body: SafeArea( // SafeArea'yı Stack'in dışına almak daha iyi olabilir.
-        top: false, // Header'lar kendi padding'ini yönetecek
-        bottom: false,
-        child: Stack(
-          children: [
-            Padding(
-              // TODO: Bu top padding değerini kendi UI'nıza göre dikkatlice ayarlayın!
-              // Duyuru kutusu ve filtrelerin toplam yüksekliği kadar olmalı.
-              // Örnek: (_aktifSayfaNo == 0) ? 130.0 : 0 (Bu değerler sizin UI'ınıza göre değişir)
-              padding: EdgeInsets.only(top: topPaddingForPageView),
-              child: PageView(
-                physics: const NeverScrollableScrollPhysics(),
-                controller: _sayfaKumandasiAnasayfa,
-                onPageChanged: (int acilanSayfaNo) {
-                  if (mounted) {
-                    setState(() => _aktifSayfaNo = acilanSayfaNo);
-                    if (acilanSayfaNo == 0) {
-                      _onerileriCekVeGoster();
-                    } else {
-                      _duyuruTimer?.cancel();
-                      if (_gosterilecekOneri != null && _aktifSayfaNo != 0) { // Sadece akış dışındaysa gizle
-                        // Gelen kutusuna geçildiğinde _gosterilecekOneri null olmamalı ki
-                        // _sonGosterilenDuyuruKutusuOnerisi doğru kalsın.
-                        // Bu mantık biraz daha detaylı düşünülmeli.
-                        // Şimdilik, diğer sayfalara geçince ana sayfadaki geçici duyuruyu kaldıralım.
-                        // setState(() { _gosterilecekOneri = null; });
-                      }
-                    }
-                  }
-                },
-                children: _sayfalar,
-              ),
+      // AppBar kullanmıyoruz, header'ı kendimiz yönetiyoruz.
+      // SafeArea'yı burada kullanmak yerine, _buildDuyuruKutusu ve filtreler
+      // kendi status bar padding'lerini yönetiyor.
+      body: Column( // Ana gövde artık bir Column
+        children: [
+          // 1. Dinamik Header (Sadece Akış sayfasında görünür)
+          if (_aktifSayfaNo == 0)
+            _buildDynamicPageHeader(context),
+
+          // 2. Sayfa İçeriği (Geri kalan tüm alanı kaplar)
+          Expanded(
+            child: PageView(
+              physics: const NeverScrollableScrollPhysics(), // Dikey kaydırmayı engelle
+              controller: _sayfaKumandasiAnasayfa,
+              onPageChanged: (int acilanSayfaNo) {
+                if (mounted) {
+                  setState(() {
+                    _aktifSayfaNo = acilanSayfaNo;
+                  });
+                  _fetchSuggestionWhenNeeded(); // Sayfa değiştiğinde öneri durumunu güncelle/temizle
+                }
+              },
+              children: _sayfalar,
             ),
-            _buildPageHeader(context),
-          ],
-        ),
+          ),
+        ],
       ),
       bottomNavigationBar: Container(
-        // ... (BottomNavigationBar kodu aynı) ...
         decoration: BoxDecoration(
             color: theme.bottomNavigationBarTheme.backgroundColor ?? const Color(0xFF121212),
             border: Border(top: BorderSide(color: Colors.grey[900]!, width: 0.5))),

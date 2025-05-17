@@ -320,6 +320,36 @@ class FirestoreServisi {
       return <Gonderi>[];
     });
   }
+  Future<void> gonderiSil({required String gonderiId, required String kullaniciId}) async {
+    if (gonderiId.isEmpty || kullaniciId.isEmpty) {
+      throw ArgumentError("Gönderi ID'si veya Kullanıcı ID'si boş olamaz.");
+    }
+    try {
+      // 1. Gönderi belgesini sil
+      await _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId).delete();
+      print("Firestore: Gönderi silindi (ID: $gonderiId)");
+
+      // 2. Kullanıcının gönderi sayısını güncelle (azalt)
+      DocumentReference kullaniciRef = _firestore.collection(_kullanicilarKoleksiyonu).doc(kullaniciId);
+      await kullaniciRef.update({
+        "gonderiSayisi": FieldValue.increment(-1),
+        "guncellenmeZamani": FieldValue.serverTimestamp(), // Güncellenme zamanını da set et
+      });
+      print("Firestore: Kullanıcının (ID: $kullaniciId) gönderi sayısı azaltıldı.");
+
+      // TODO (İleri Seviye): Bu gönderiye ait resimleri Firebase Storage'dan sil.
+      // Bu genellikle Firebase Functions ile asenkron olarak yapılır.
+      // Gonderi belgesinde resimlerin Storage path'lerini tutuyorsanız,
+      // bir Cloud Function tetikleyerek bu path'lerdeki dosyaları silebilirsiniz.
+
+    } on FirebaseException catch (e) {
+      print("Firestore Hatası (gonderiSil): ${e.code} - ${e.message}");
+      throw Exception("Gönderi silinirken bir sunucu hatası oluştu: ${e.message}");
+    } catch (e) {
+      print("Beklenmedik Hata (gonderiSil): $e");
+      throw Exception("Gönderi silinirken beklenmedik bir hata oluştu.");
+    }
+  }
 
 
   // YENİ GÜNCELLENMİŞ METOD: Gönderileri temaya ve sıralamaya göre getirme
