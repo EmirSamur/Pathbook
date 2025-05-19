@@ -308,7 +308,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => git Profil(aktifKullanici: gonderi.yayinlayanKullanici!),
+                  builder: (context) => Profil(aktifKullanici: gonderi.yayinlayanKullanici!),
                 ),
               );
             } else {

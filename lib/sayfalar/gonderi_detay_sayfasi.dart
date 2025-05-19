@@ -8,30 +8,24 @@ import 'package:provider/provider.dart';
 import 'package:pathbooks/servisler/firestoreseervisi.dart';
 import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
 import 'package:intl/intl.dart';
-
 class GonderiDetaySayfasi extends StatefulWidget {
   final Gonderi gonderi;
-
   const GonderiDetaySayfasi({
     Key? key,
     required this.gonderi,
   }) : super(key: key);
-
   @override
   _GonderiDetaySayfasiState createState() => _GonderiDetaySayfasiState();
 }
-
 class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
   late Gonderi _gonderi;
   Kullanici? _yayinlayanKullanici;
   bool _kullaniciYukleniyor = true;
-
   bool _isLiked = false;
   int _likeCount = 0;
   bool _isLiking = false;
   String? _aktifKullaniciId;
   late FirestoreServisi _firestoreServisi;
-
   int _currentImageIndex = 0;
 
   @override
@@ -39,9 +33,10 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
     super.initState();
     _gonderi = widget.gonderi;
     _likeCount = _gonderi.begeniSayisi;
-
     _firestoreServisi = Provider.of<FirestoreServisi>(context, listen: false);
-    _aktifKullaniciId = Provider.of<YetkilendirmeServisi>(context, listen: false).aktifKullaniciId;
+    _aktifKullaniciId = Provider
+        .of<YetkilendirmeServisi>(context, listen: false)
+        .aktifKullaniciId;
 
     _yayinlayanKullaniciyiGetir();
     if (_aktifKullaniciId != null && _aktifKullaniciId!.isNotEmpty) {
@@ -52,7 +47,6 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
   Future<void> _yayinlayanKullaniciyiGetir() async {
     if (!mounted) return; // Widget ağaçtan kaldırıldıysa işlem yapma
     setState(() => _kullaniciYukleniyor = true);
-
     if (_gonderi.yayinlayanKullanici != null) {
       if (mounted) {
         setState(() {
@@ -62,7 +56,8 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
       }
       return;
     }
-    Kullanici? kullanici = await _firestoreServisi.kullaniciGetir(_gonderi.kullaniciId);
+    Kullanici? kullanici = await _firestoreServisi.kullaniciGetir(
+        _gonderi.kullaniciId);
     if (mounted) {
       setState(() {
         _yayinlayanKullanici = kullanici;
@@ -72,7 +67,8 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
   }
 
   Future<void> _checkIfLiked() async {
-    if (_gonderi.id.isEmpty || _aktifKullaniciId == null || _aktifKullaniciId!.isEmpty || !mounted) {
+    if (_gonderi.id.isEmpty || _aktifKullaniciId == null ||
+        _aktifKullaniciId!.isEmpty || !mounted) {
       if (mounted) setState(() => _isLiked = false);
       return;
     }
@@ -81,13 +77,16 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
       aktifKullaniciId: _aktifKullaniciId!,
     );
     if (mounted) {
-      setState(() { _isLiked = liked; });
+      setState(() {
+        _isLiked = liked;
+      });
     }
   }
 
   Future<void> _toggleLike() async {
     if (_aktifKullaniciId == null || _aktifKullaniciId!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Beğenmek için giriş yapmalısınız.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Beğenmek için giriş yapmalısınız.")));
       return;
     }
     if (_isLiking || !mounted) return;
@@ -104,21 +103,29 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
     } catch (e) {
       print("GonderiDetaySayfasi - Beğeni toggle hatası: $e");
       if (mounted) {
-        setState(() { _isLiked = !_isLiked; _likeCount += _isLiked ? 1 : -1; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Beğeni işlemi sırasında bir hata oluştu.")));
+        setState(() {
+          _isLiked = !_isLiked;
+          _likeCount += _isLiked ? 1 : -1;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Beğeni işlemi sırasında bir hata oluştu.")));
       }
     } finally {
-      if (mounted) { setState(() { _isLiking = false; }); }
+      if (mounted) {
+        setState(() {
+          _isLiking = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Nullable string için güvenli kontrol ve varsayılan değer
+// Nullable string için güvenli kontrol ve varsayılan değer
     String appBarTitle = "Gönderi Detayı";
-    if (_yayinlayanKullanici != null && _yayinlayanKullanici!.kullaniciAdi!.isNotEmpty) {
+    if (_yayinlayanKullanici != null &&
+        _yayinlayanKullanici!.kullaniciAdi!.isNotEmpty) {
       appBarTitle = "${_yayinlayanKullanici!.kullaniciAdi}'nın Gönderisi";
     }
 
@@ -143,7 +150,8 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => Profil(aktifKullanici: _yayinlayanKullanici!),
+                        builder: (_) =>
+                            Profil(aktifKullanici: _yayinlayanKullanici!),
                       ),
                     );
                   },
@@ -151,18 +159,24 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                     children: [
                       CircleAvatar(
                         radius: 22,
-                        backgroundColor: theme.colorScheme.surfaceVariant, // Placeholder rengi
-                        backgroundImage: (_yayinlayanKullanici!.fotoUrl != null && _yayinlayanKullanici!.fotoUrl!.isNotEmpty)
+                        backgroundColor: theme.colorScheme.surfaceVariant,
+                        // Placeholder rengi
+                        backgroundImage: (_yayinlayanKullanici!.fotoUrl !=
+                            null && _yayinlayanKullanici!.fotoUrl!.isNotEmpty)
                             ? NetworkImage(_yayinlayanKullanici!.fotoUrl!)
                             : null,
-                        child: (_yayinlayanKullanici!.fotoUrl == null || _yayinlayanKullanici!.fotoUrl!.isEmpty)
-                            ? Icon(Icons.person, size: 24, color: theme.colorScheme.onSurfaceVariant)
+                        child: (_yayinlayanKullanici!.fotoUrl == null ||
+                            _yayinlayanKullanici!.fotoUrl!.isEmpty)
+                            ? Icon(Icons.person, size: 24,
+                            color: theme.colorScheme.onSurfaceVariant)
                             : null,
                       ),
                       SizedBox(width: 10),
                       Text(
-                        _yayinlayanKullanici!.kullaniciAdi!, // kullaniciAdi'nın null olmaması beklenir, ama güvenlik için ?? ""
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        _yayinlayanKullanici!.kullaniciAdi!,
+                        // kullaniciAdi'nın null olmaması beklenir, ama güvenlik için ?? ""
+                        style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -176,12 +190,17 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                 alignment: Alignment.bottomCenter,
                 children: [
                   Container(
-                    height: MediaQuery.of(context).size.width * (4 / 3), // Veya istediğiniz bir oran
+                    height: MediaQuery
+                        .of(context)
+                        .size
+                        .width * (4 / 3), // Veya istediğiniz bir oran
                     child: PageView.builder(
                       itemCount: _gonderi.resimUrls.length,
                       onPageChanged: (index) {
                         if (mounted) {
-                          setState(() { _currentImageIndex = index; });
+                          setState(() {
+                            _currentImageIndex = index;
+                          });
                         }
                       },
                       itemBuilder: (context, index) {
@@ -193,7 +212,9 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                             return Center(child: CircularProgressIndicator());
                           },
                           errorBuilder: (context, error, stackTrace) {
-                            return Center(child: Icon(Icons.broken_image_outlined, size: 50, color: Colors.grey[400]));
+                            return Center(child: Icon(
+                                Icons.broken_image_outlined, size: 50,
+                                color: Colors.grey[400]));
                           },
                         );
                       },
@@ -203,13 +224,15 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                     Positioned(
                       bottom: 10.0,
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          "${_currentImageIndex + 1} / ${_gonderi.resimUrls.length}",
+                          "${_currentImageIndex + 1} / ${_gonderi.resimUrls
+                              .length}",
                           style: TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ),
@@ -220,7 +243,8 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
               Container(
                 height: 200,
                 color: Colors.grey[200],
-                child: Center(child: Text("Görsel bulunmuyor", style: TextStyle(color: Colors.grey[600]))),
+                child: Center(child: Text("Görsel bulunmuyor",
+                    style: TextStyle(color: Colors.grey[600]))),
               ),
 
             Padding(
@@ -231,26 +255,34 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                   // 3. Konum ve Kategori
                   Row(
                     children: [
-                      if (_gonderi.konum != null && _gonderi.konum!.isNotEmpty) ...[
-                        Icon(Icons.location_on_outlined, size: 18, color: theme.colorScheme.secondary),
+                      if (_gonderi.konum != null &&
+                          _gonderi.konum!.isNotEmpty) ...[
+                        Icon(Icons.location_on_outlined, size: 18,
+                            color: theme.colorScheme.secondary),
                         SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             _gonderi.konum!, // Null kontrolü yapıldı
-                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w500),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
-                      if (_gonderi.konum != null && _gonderi.konum!.isNotEmpty && _gonderi.kategori.isNotEmpty)
+                      if (_gonderi.konum != null &&
+                          _gonderi.konum!.isNotEmpty &&
+                          _gonderi.kategori.isNotEmpty)
                         SizedBox(width: 8), // Konum ve kategori arasında boşluk
                       if (_gonderi.kategori.isNotEmpty)
                         Chip(
                           label: Text(_gonderi.kategori),
                           backgroundColor: theme.colorScheme.secondaryContainer,
-                          labelStyle: TextStyle(color: theme.colorScheme.onSecondaryContainer, fontSize: 12),
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          labelStyle: TextStyle(color: theme.colorScheme
+                              .onSecondaryContainer, fontSize: 12),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 0),
+                          materialTapTargetSize: MaterialTapTargetSize
+                              .shrinkWrap,
                         ),
                     ],
                   ),
@@ -265,14 +297,17 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                   else
                     Text(
                       "Açıklama yok.",
-                      style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic, color: Colors.grey[600]),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          fontStyle: FontStyle.italic, color: Colors.grey[600]),
                     ),
                   SizedBox(height: 12),
 
                   // 5. Tarih/Saat Bilgisi
                   Text(
-                    DateFormat('dd MMMM yyyy, EEEE HH:mm', 'tr_TR').format(_gonderi.olusturulmaZamani.toDate()),
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                    DateFormat('dd MMMM yyyy, EEEE HH:mm', 'tr_TR').format(
+                        _gonderi.olusturulmaZamani.toDate()),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600]),
                   ),
                   SizedBox(height: 20),
                   Divider(),
@@ -285,18 +320,22 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                       TextButton.icon(
                         icon: Icon(
                           _isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: _isLiked ? theme.colorScheme.error : theme.iconTheme.color,
+                          color: _isLiked ? theme.colorScheme.error : theme
+                              .iconTheme.color,
                         ),
-                        label: Text("$_likeCount Beğeni", style: theme.textTheme.labelLarge),
+                        label: Text("$_likeCount Beğeni",
+                            style: theme.textTheme.labelLarge),
                         onPressed: _toggleLike,
                       ),
                       TextButton.icon(
                         icon: Icon(Icons.chat_bubble_outline),
-                        label: Text("${_gonderi.yorumSayisi} Yorum", style: theme.textTheme.labelLarge),
+                        label: Text("${_gonderi.yorumSayisi} Yorum",
+                            style: theme.textTheme.labelLarge),
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => YorumlarSayfasi(gonderiId: _gonderi.id)),
+                            MaterialPageRoute(builder: (_) =>
+                                YorumlarSayfasi(gonderiId: _gonderi.id)),
                           );
                         },
                       ),
