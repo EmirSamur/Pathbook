@@ -35,7 +35,6 @@ class _AnasayfaState extends State<Anasayfa> {
   List<OneriModeli> _onerilerListesi = [];
   OneriModeli? _gosterilecekOneri;
   OneriModeli? _sonGosterilenDuyuruKutusuOnerisi;
-  // bool _onerilerYukleniyor = true; // Artık doğrudan kullanılmıyor gibi
   final Random _random = Random();
   Timer? _duyuruTimer;
 
@@ -43,49 +42,42 @@ class _AnasayfaState extends State<Anasayfa> {
   void initState() {
     super.initState();
     _sayfaKumandasiAnasayfa = PageController(initialPage: _aktifSayfaNo);
-    if (widget.aktifKullanici.fotoUrl != null && widget.aktifKullanici.fotoUrl!.isNotEmpty) {
-      _aktifKullaniciProfilFotoUrl = widget.aktifKullanici.fotoUrl;
-    }
+    _aktifKullaniciProfilFotoUrl = widget.aktifKullanici.fotoUrl?.isNotEmpty == true
+        ? widget.aktifKullanici.fotoUrl
+        : null;
     _firestoreServisi = Provider.of<FirestoreServisi>(context, listen: false);
-    _fetchSuggestionWhenNeeded(); // initState'te ve sayfa değişiminde çağrılacak
+    _fetchSuggestionWhenNeeded();
   }
 
   Future<void> _fetchSuggestionWhenNeeded() async {
     if (!mounted) return;
 
-    if (_aktifSayfaNo == 0) { // Sadece Akış sayfasındayken
-      if (_gosterilecekOneri == null) { // Ve zaten bir öneri gösterilmiyorsa
-        // setState(() { _onerilerYukleniyor = true; }); // İsteğe bağlı
+    if (_aktifSayfaNo == 0) { // Sadece Akış sayfasındayken öneri göster/güncelle
+      if (_gosterilecekOneri == null) {
         _duyuruTimer?.cancel();
         try {
           if (_onerilerListesi.isEmpty) {
             _onerilerListesi = await _firestoreServisi.tumOnerileriGetir();
           }
-          if (_onerilerListesi.isNotEmpty) {
+          if (_onerilerListesi.isNotEmpty && mounted) {
             final int randomIndex = _random.nextInt(_onerilerListesi.length);
-            if (mounted) {
-              setState(() {
-                _gosterilecekOneri = _onerilerListesi[randomIndex];
-                _sonGosterilenDuyuruKutusuOnerisi = _gosterilecekOneri;
-                // _onerilerYukleniyor = false;
-              });
-              _duyuruTimer = Timer(const Duration(seconds: 5), () {
-                if (mounted) {
-                  setState(() {
-                    _gosterilecekOneri = null;
-                  });
-                }
-              });
-            }
-          } else {
-            // if (mounted) setState(() => _onerilerYukleniyor = false);
+            setState(() {
+              _gosterilecekOneri = _onerilerListesi[randomIndex];
+              _sonGosterilenDuyuruKutusuOnerisi = _gosterilecekOneri;
+            });
+            _duyuruTimer = Timer(const Duration(seconds: 7), () {
+              if (mounted) {
+                setState(() {
+                  _gosterilecekOneri = null;
+                });
+              }
+            });
           }
         } catch (e) {
           print("Anasayfa - Öneriler çekilirken hata: $e");
-          // if (mounted) setState(() => _onerilerYukleniyor = false);
         }
       }
-    } else { // Akış sayfasında değilsek, mevcut öneriyi ve timer'ı temizle
+    } else { // Diğer sayfalarda öneriyi ve timer'ı temizle
       _duyuruTimer?.cancel();
       if (mounted && _gosterilecekOneri != null) {
         setState(() {
@@ -102,15 +94,16 @@ class _AnasayfaState extends State<Anasayfa> {
     super.dispose();
   }
 
-  Widget _buildDuyuruKutusu(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget _buildDuyuruKutusu(BuildContext context, ThemeData theme) {
+    // Bu metodun içeriği bir önceki cevaptaki gibi kalabilir.
+    // Sadece Stack içinde nasıl konumlandırılacağı build metodunda ayarlanacak.
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 450),
       transitionBuilder: (Widget child, Animation<double> animation) {
         return FadeTransition(
           opacity: animation,
           child: SizeTransition(
-            sizeFactor: animation,
+            sizeFactor: CurvedAnimation(parent: animation, curve: Curves.easeOutQuart),
             axis: Axis.vertical,
             axisAlignment: -1.0,
             child: child,
@@ -118,70 +111,174 @@ class _AnasayfaState extends State<Anasayfa> {
         );
       },
       child: _gosterilecekOneri == null
-          ? SizedBox.shrink(key: const ValueKey('bosDuyuruAnasayfa'))
-          : Material(
-        key: ValueKey(_gosterilecekOneri!.id),
-        color: theme.cardTheme.color ?? theme.colorScheme.surfaceVariant,
-        elevation: 1.0, // Hafif bir gölge
-        child: InkWell(
-          onTap: () {
-            _duyuruTimer?.cancel();
-            final OneriModeli? tiklananOneri = _gosterilecekOneri;
-            if (mounted) {
-              setState(() { _gosterilecekOneri = null; });
-            }
-            if (tiklananOneri != null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DuyurularSayfasi(secilenOneri: tiklananOneri),
-                ),
-              );
-            }
-          },
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 10.0, // Status bar + iç padding
-              bottom: 10.0,
-              left: 16.0,
-              right: 16.0,
-            ),
-            constraints: BoxConstraints(minHeight: 60), // Biraz daha kompakt
-            child: Row(
-              children: [
-                if (_gosterilecekOneri!.gorselUrl != null && _gosterilecekOneri!.gorselUrl!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12.0),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6.0),
-                      child: Image.network(
-                        _gosterilecekOneri!.gorselUrl!,
-                        width: 36, height: 36, fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(Icons.image_not_supported, size: 28, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+          ? SizedBox.shrink(key: const ValueKey('bosDuyuruAnasayfaStack')) // Farklı bir key
+          : Container(
+        key: ValueKey('duyuruKutusuStack_${_gosterilecekOneri!.id}'), // Farklı bir key
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              theme.colorScheme.surfaceVariant.withOpacity(0.95), // Opaklık ayarlandı
+              theme.colorScheme.surface.withOpacity(0.98),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15), // Gölge ayarlandı
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ],
+          // borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)), // Sadece alt köşeler yuvarlak olabilir
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              _duyuruTimer?.cancel();
+              final OneriModeli? tiklananOneri = _gosterilecekOneri;
+              if (mounted) {
+                setState(() { _gosterilecekOneri = null; });
+              }
+              if (tiklananOneri != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DuyurularSayfasi(secilenOneri: tiklananOneri),
+                  ),
+                );
+              }
+            },
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 10.0, // Status bar için padding
+                bottom: 10.0,
+                left: 16.0,
+                right: 16.0,
+              ),
+              constraints: const BoxConstraints(minHeight: 60),
+              child: Row(
+                children: [
+                  if (_gosterilecekOneri!.gorselUrl?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6.0),
+                          border: Border.all(color: theme.dividerColor.withOpacity(0.3), width: 0.5),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(5.5),
+                          child: Image.network(
+                            _gosterilecekOneri!.gorselUrl!,
+                            width: 36, height: 36, fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.campaign_outlined, size: 28),
+                          ),
+                        ),
                       ),
                     ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _gosterilecekOneri!.yerAdi,
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface, fontSize: 13),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          _gosterilecekOneri!.ipucuMetni,
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.75), fontSize: 11),
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _gosterilecekOneri!.yerAdi,
-                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: 1),
-                      Text(
-                        _gosterilecekOneri!.ipucuMetni,
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8), fontSize: 11),
-                        maxLines: 2, overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 15, color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip( // Bu metodun içeriği bir önceki cevaptaki gibi kalabilir
+      String label,
+      IconData iconData,
+      bool isSelected,
+      VoidCallback onTap,
+      ThemeData theme,
+      ) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(25),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(25),
+          splashColor: theme.colorScheme.primary.withOpacity(0.1),
+          highlightColor: theme.colorScheme.primary.withOpacity(0.05),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? theme.colorScheme.primary.withOpacity(0.9)
+                  : theme.colorScheme.surfaceVariant.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outline.withOpacity(0.3),
+                width: isSelected ? 1.8 : 1.2,
+              ),
+              boxShadow: isSelected
+                  ? [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withOpacity(0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                )
+              ]
+                  : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                )
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  iconData,
+                  size: 16,
+                  color: isSelected
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.onSurfaceVariant.withOpacity(0.9),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected
+                        ? theme.colorScheme.onPrimary
+                        : theme.colorScheme.onSurfaceVariant.withOpacity(0.9),
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 12,
+                    letterSpacing: 0.3,
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios, size: 14, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7)),
               ],
             ),
           ),
@@ -190,108 +287,98 @@ class _AnasayfaState extends State<Anasayfa> {
     );
   }
 
-  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap, ThemeData theme) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8), // Yüksekliği ayarlayabilirsiniz
-          decoration: BoxDecoration(
-            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.surface.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(8),
-            border: isSelected ? Border.all(color: theme.colorScheme.primary.withOpacity(0.5), width: 1) : null,
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: (isSelected
-                ? theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onPrimary) // labelMedium
-                : theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.8), fontSize: 12) // Biraz daha küçük
-            )?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500),
-          ),
-        ),
+  // SADECE FİLTRELERİ İÇEREN YENİ HEADER WIDGET'I
+  Widget _buildFilterHeader(BuildContext context, ThemeData theme) {
+    return Container(
+      // Arka planı Akış sayfasının arka planıyla uyumlu veya hafif transparan
+      color: theme.scaffoldBackgroundColor.withOpacity(0.95), // Veya theme.appBarTheme.backgroundColor
+      padding: EdgeInsets.only(
+        // Eğer öneri kutusu hiç gösterilmiyorsa veya Stack'te ayrıysa,
+        // filtrelerin üst padding'i status bar'ı içermeli.
+        // Şimdilik öneri kutusu Stack'te olduğu için bu padding basit kalabilir.
+        top: MediaQuery.of(context).padding.top + 8.0, // Status bar + boşluk
+        bottom: 8.0,
+        left: 12.0,
+        right: 12.0,
       ),
-    );
-  }
-
-  // Bu metot artık Positioned döndürmüyor, direkt Column'un bir parçası olacak.
-  Widget _buildDynamicPageHeader(BuildContext context) {
-    final theme = Theme.of(context);
-    // Bu Column, _buildDuyuruKutusu ve filtreleri içerir.
-    // Kendi padding'lerini ve yüksekliklerini yönetirler.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildDuyuruKutusu(context), // Bu, içinde status bar için padding içeriyor
-        Container( // Filtreler
-          color: theme.appBarTheme.backgroundColor?.withOpacity(0.95) ?? Colors.black.withOpacity(0.85),
-          padding: EdgeInsets.only(
-            // Eğer _buildDuyuruKutusu görünmüyorsa (SizedBox.shrink ise),
-            // filtrelerin üst padding'i status bar'ı içermeli.
-            // _buildDuyuruKutusu göründüğünde, o zaten status bar'ı hallettiği için
-            // filtrelerin sadece kendi iç padding'i (örn: 8.0) yeterli.
-            top: (_gosterilecekOneri == null) ? MediaQuery.of(context).padding.top + 8.0 : 8.0,
-            bottom: 8.0,
-            left: 16.0,
-            right: 16.0,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildFilterChip("Keşfet", _selectedFilterInAkis == 0, () => setState(() => _selectedFilterInAkis = 0), theme),
-              const SizedBox(width: 10),
-              _buildFilterChip("Takip Edilenler", _selectedFilterInAkis == 1, () => setState(() => _selectedFilterInAkis = 1), theme),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final List<Widget> _sayfalar = [
-      Akis(selectedFilter: _selectedFilterInAkis), // Akis'e ekstra padding parametresi GEÇİLMİYOR
-      const AraSayfasi(),
-      GonderiEkleSayfasi(),
-      GelenKutusuSayfasi(sonOneri: _sonGosterilenDuyuruKutusuOnerisi),
-      Profil(aktifKullanici: widget.aktifKullanici),
-    ];
-
-    return Scaffold(
-      // AppBar kullanmıyoruz, header'ı kendimiz yönetiyoruz.
-      // SafeArea'yı burada kullanmak yerine, _buildDuyuruKutusu ve filtreler
-      // kendi status bar padding'lerini yönetiyor.
-      body: Column( // Ana gövde artık bir Column
+      child: Row(
         children: [
-          // 1. Dinamik Header (Sadece Akış sayfasında görünür)
-          if (_aktifSayfaNo == 0)
-            _buildDynamicPageHeader(context),
-
-          // 2. Sayfa İçeriği (Geri kalan tüm alanı kaplar)
-          Expanded(
-            child: PageView(
-              physics: const NeverScrollableScrollPhysics(), // Dikey kaydırmayı engelle
-              controller: _sayfaKumandasiAnasayfa,
-              onPageChanged: (int acilanSayfaNo) {
-                if (mounted) {
-                  setState(() {
-                    _aktifSayfaNo = acilanSayfaNo;
-                  });
-                  _fetchSuggestionWhenNeeded(); // Sayfa değiştiğinde öneri durumunu güncelle/temizle
-                }
-              },
-              children: _sayfalar,
-            ),
+          _buildFilterChip(
+              "Keşfet",
+              Icons.explore_outlined,
+              _selectedFilterInAkis == 0,
+                  () { if(mounted && _selectedFilterInAkis != 0) setState(() => _selectedFilterInAkis = 0);},
+              theme
+          ),
+          const SizedBox(width: 10),
+          _buildFilterChip(
+              "Takip Edilenler",
+              Icons.people_outline_rounded,
+              _selectedFilterInAkis == 1,
+                  () { if(mounted && _selectedFilterInAkis != 1) setState(() => _selectedFilterInAkis = 1);},
+              theme
           ),
         ],
       ),
-      bottomNavigationBar: Container(
+    );
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    final List<Widget> _sayfalar = [
+      Akis(key: const ValueKey('akisSayfasi'), selectedFilter: _selectedFilterInAkis),
+      const AraSayfasi(key: ValueKey('araSayfasi')),
+      const GonderiEkleSayfasi(key: ValueKey('gonderiEkleSayfasi')),
+      GelenKutusuSayfasi(key: const ValueKey('gelenKutusuSayfasi'), sonOneri: _sonGosterilenDuyuruKutusuOnerisi),
+      Profil(key: ValueKey('profilSayfasi_${widget.aktifKullanici.id}'), aktifKullanici: widget.aktifKullanici),
+    ];
+
+    return Scaffold(
+      // backgroundColor: theme.scaffoldBackgroundColor, // Scaffold'un genel arka planı
+      body: Stack( // ANA GÖVDE ARTIK BİR STACK
+        children: [
+          // 1. Sayfa İçeriği (Tüm alanı kaplar, en altta)
+          Column( // PageView'in üstüne filtreleri koymak için Column
+            children: [
+              // Sadece Akış sayfasındaysa ve öneri kutusu görünmüyorsa filtreleri göster
+              // Eğer öneri kutusu da Stack'teyse bu mantık değişir.
+              // Şimdilik filtreler her zaman Akış sayfasının üstünde, öneri kutusunun altında.
+              if (_aktifSayfaNo == 0) _buildFilterHeader(context, theme),
+              Expanded(
+                child: PageView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  controller: _sayfaKumandasiAnasayfa,
+                  onPageChanged: (int acilanSayfaNo) {
+                    if (mounted) {
+                      setState(() {
+                        _aktifSayfaNo = acilanSayfaNo;
+                      });
+                      _fetchSuggestionWhenNeeded(); // Sayfa değiştiğinde öneri mantığını çalıştır
+                    }
+                  },
+                  children: _sayfalar,
+                ),
+              ),
+            ],
+          ),
+
+          // 2. Öneri/Duyuru Kutusu (Üstte, sadece Akış sayfasında ve öneri varsa görünür)
+          if (_aktifSayfaNo == 0) // Sadece Akış sayfasında göster
+            Positioned( // Stack içinde konumlandırma
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildDuyuruKutusu(context, theme),
+            ),
+        ],
+      ),
+      bottomNavigationBar: Container( /* ... (BottomNavigationBar aynı kalır) ... */
         decoration: BoxDecoration(
-            color: theme.bottomNavigationBarTheme.backgroundColor ?? const Color(0xFF121212),
-            border: Border(top: BorderSide(color: Colors.grey[900]!, width: 0.5))),
+            color: theme.bottomNavigationBarTheme.backgroundColor ?? const Color(0xFF0F0F0F),
+            border: Border(top: BorderSide(color: Colors.grey[850]!, width: 0.6))),
         child: BottomNavigationBar(
           currentIndex: _aktifSayfaNo,
           onTap: (int secilenSayfaNo) {
@@ -302,37 +389,59 @@ class _AnasayfaState extends State<Anasayfa> {
           type: theme.bottomNavigationBarTheme.type ?? BottomNavigationBarType.fixed,
           backgroundColor: Colors.transparent,
           selectedItemColor: theme.bottomNavigationBarTheme.selectedItemColor ?? theme.colorScheme.primary,
-          unselectedItemColor: theme.bottomNavigationBarTheme.unselectedItemColor ?? Colors.grey[600],
-          selectedFontSize: theme.bottomNavigationBarTheme.selectedLabelStyle?.fontSize ?? 11,
-          unselectedFontSize: theme.bottomNavigationBarTheme.unselectedLabelStyle?.fontSize ?? 10,
+          unselectedItemColor: theme.bottomNavigationBarTheme.unselectedItemColor ?? Colors.grey[500],
+          selectedLabelStyle: theme.bottomNavigationBarTheme.selectedLabelStyle?.copyWith(fontWeight: FontWeight.w600) ?? const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          unselectedLabelStyle: theme.bottomNavigationBarTheme.unselectedLabelStyle ?? const TextStyle(fontSize: 10),
           items: [
-            _buildNavBarItem(iconData: Icons.home_outlined, activeIconData: Icons.home_filled, label: 'Ana Sayfa', index: 0, theme: theme),
-            _buildNavBarItem(iconData: Icons.search_outlined, activeIconData: Icons.search, label: 'Ara', index: 1, theme: theme),
-            _buildNavBarItem(iconData: Icons.add_circle_outline_rounded, activeIconData: Icons.add_circle_rounded, label: 'Yükle', index: 2, iconSize: 27, theme: theme, isSpecial: true, specialColor: Colors.red[600]),
-            _buildNavBarItem(iconData: Icons.inbox_outlined, activeIconData: Icons.inbox_rounded, label: 'Gelen Kutusu', index: 3, theme: theme),
-            BottomNavigationBarItem(icon: _buildProfileIconForNavBar(isSelected: _aktifSayfaNo == 4, profileImageUrl: _aktifKullaniciProfilFotoUrl, theme: theme), label: 'Profil'),
+            _buildNavBarItem(iconData: Icons.home_outlined, activeIconData: Icons.home_rounded, label: 'Ana Sayfa', index: 0, theme: theme),
+            _buildNavBarItem(iconData: Icons.search_rounded, activeIconData: Icons.search_off_rounded, label: 'Ara', index: 1, theme: theme, iconSize: 24),
+            _buildNavBarItem(iconData: Icons.add_box_outlined, activeIconData: Icons.add_box_rounded, label: 'Yükle', index: 2, theme: theme, iconSize: 28, isSpecial: true, specialColor: Colors.redAccent[400]),
+            _buildNavBarItem(iconData: Icons.notifications_none_rounded, activeIconData: Icons.notifications_rounded, label: 'Öneriler', index: 3, theme: theme),
+            BottomNavigationBarItem(
+                icon: _buildProfileIconForNavBar(isSelected: _aktifSayfaNo == 4, profileImageUrl: _aktifKullaniciProfilFotoUrl, theme: theme),
+                label: 'Profil'
+            ),
           ],
         ),
       ),
     );
   }
 
+  // _buildNavBarItem ve _buildProfileIconForNavBar metodları bir önceki cevaptaki gibi kalabilir.
   BottomNavigationBarItem _buildNavBarItem({ required IconData iconData, required IconData activeIconData, required String label, required int index, required ThemeData theme, double? iconSize, bool isSpecial = false, Color? specialColor }) {
-    bool isSelected = _aktifSayfaNo == index;
-    return BottomNavigationBarItem(icon: Icon(isSelected ? activeIconData : iconData, size: iconSize ?? (isSelected ? 25 : 23)), label: label);
+    final bool isSelected = _aktifSayfaNo == index;
+    final Color itemColor = isSpecial
+        ? (specialColor ?? theme.colorScheme.error)
+        : (isSelected
+        ? (theme.bottomNavigationBarTheme.selectedItemColor ?? theme.colorScheme.primary)
+        : (theme.bottomNavigationBarTheme.unselectedItemColor ?? Colors.grey[500]!));
+
+    return BottomNavigationBarItem(
+        icon: Icon(
+            isSelected ? activeIconData : iconData,
+            size: iconSize ?? (isSelected ? 26 : 23),
+            color: itemColor
+        ),
+        label: label
+    );
   }
 
   Widget _buildProfileIconForNavBar({ required bool isSelected, String? profileImageUrl, required ThemeData theme }) {
-    double avatarRadius = 12.5;
-    Color borderColor = isSelected ? (theme.bottomNavigationBarTheme.selectedItemColor ?? theme.colorScheme.primary) : Colors.grey[700]!;
+    const double avatarRadius = 12;
+    final Color borderColor = isSelected ? (theme.bottomNavigationBarTheme.selectedItemColor ?? theme.colorScheme.primary) : Colors.grey[600]!;
     return Container(
-      padding: const EdgeInsets.all(0.5),
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: borderColor.withOpacity(isSelected ? 1.0 : 0.7), width: isSelected ? 1.8 : 1.2)),
+      padding: const EdgeInsets.all(0.8),
+      decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: borderColor.withOpacity(isSelected ? 1.0 : 0.55), width: isSelected ? 2.0 : 1.4)
+      ),
       child: CircleAvatar(
         radius: avatarRadius,
         backgroundImage: (profileImageUrl != null && profileImageUrl.isNotEmpty) ? NetworkImage(profileImageUrl) : null,
-        backgroundColor: theme.colorScheme.surface,
-        child: (profileImageUrl == null || profileImageUrl.isEmpty) ? Icon(Icons.person_outline_rounded, size: avatarRadius + 3) : null,
+        backgroundColor: theme.colorScheme.surface.withOpacity(0.75),
+        child: (profileImageUrl == null || profileImageUrl.isEmpty)
+            ? Icon(Icons.person_outline_rounded, size: avatarRadius + 4, color: theme.iconTheme.color?.withOpacity(0.65))
+            : null,
       ),
     );
   }
