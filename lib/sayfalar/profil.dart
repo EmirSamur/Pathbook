@@ -448,8 +448,7 @@ class _ProfilState extends State<Profil> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20.0),
                 child: Column(children: [
-                  _buildOptionListTile(icon: Icons.help_center_outlined, title: "Yardım Merkezi", onTap: () {}),
-                  _buildOptionListTile(icon: Icons.policy_outlined, title: "Gizlilik Politikası", onTap: () {}),
+
                 ]),
               ),
             ),
