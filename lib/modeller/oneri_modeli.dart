@@ -1,14 +1,15 @@
 // lib/modeller/oneri_modeli.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:equatable/equatable.dart'; // equatable paketini pubspec.yaml'a ekleyin: equatable: ^2.0.5
 
-class OneriModeli {
+class OneriModeli extends Equatable {
   final String id;          // Firestore belgesinin ID'si
   final String yerAdi;
   final String ipucuMetni;
-  final String? gorselUrl;   // Opsiyonel olduğu için String? yaptık
+  final String? gorselUrl;   // Opsiyonel
 
-  OneriModeli({
+  const OneriModeli({ // const constructor, Equatable ve performans için iyi
     required this.id,
     required this.yerAdi,
     required this.ipucuMetni,
@@ -17,15 +18,10 @@ class OneriModeli {
 
   // Firestore DocumentSnapshot'tan OneriModeli nesnesi üreten fabrika metodu
   factory OneriModeli.dokumandanUret(DocumentSnapshot doc) {
-    // Gelen verinin Map<String, dynamic> olduğundan emin olalım
     final data = doc.data() as Map<String, dynamic>?;
 
-    // data null ise veya beklenen alanlar yoksa hata fırlatmak yerine
-    // varsayılan değerler atayabilir veya null döndürebiliriz.
-    // Şimdilik, alanlar eksikse boş string veya null atayalım.
     if (data == null) {
-      // Bu durum aslında olmamalı, ama bir güvenlik önlemi
-      print("UYARI: OneriModeli.dokumandanUret - Belge verisi null geldi. ID: ${doc.id}");
+      print("UYARI: OneriModeli.dokumandanUret - Belge verisi null geldi. ID: ${doc.id}. Varsayılan model oluşturuluyor.");
       return OneriModeli(
         id: doc.id,
         yerAdi: "Bilinmeyen Yer",
@@ -34,11 +30,89 @@ class OneriModeli {
       );
     }
 
+    // Alanları daha güvenli bir şekilde almak için yardımcı fonksiyonlar
+    String _getString(Map<String, dynamic> data, String key, String defaultValue, String docId) {
+      final value = data[key];
+      if (value is String) {
+        return value;
+      }
+      if (value != null) {
+        // Eğer değer null değil ama String de değilse, bir uyarı logla
+        print("UYARI: OneriModeli.dokumandanUret (ID: $docId) - '$key' alanı String tipinde bekleniyordu ancak '${value.runtimeType}' tipinde geldi. Varsayılan değer ('$defaultValue') kullanılacak.");
+      }
+      return defaultValue;
+    }
+
+    String? _getNullableString(Map<String, dynamic> data, String key, String docId) {
+      final value = data[key];
+      if (value is String) {
+        return value;
+      }
+      if (value == null) {
+        // Değer null ise bu geçerli bir durumdur nullable String için
+        return null;
+      }
+      // Null değil ve String de değilse, uyarı logla ve null döndür
+      print("UYARI: OneriModeli.dokumandanUret (ID: $docId) - '$key' alanı String? (nullable String) tipinde bekleniyordu ancak '${value.runtimeType}' tipinde geldi. Null değeri kullanılacak.");
+      return null;
+    }
+
     return OneriModeli(
       id: doc.id, // Belgenin kendi ID'sini kullanıyoruz
-      yerAdi: data['yerAdi'] as String? ?? 'Başlıksız Öneri', // Null ise varsayılan
-      ipucuMetni: data['ipucuMetni'] as String? ?? 'Keşfetmek için dokun...', // Null ise varsayılan
-      gorselUrl: data['gorselUrl'] as String?, // Zaten nullable, cast yeterli
+      yerAdi: _getString(data, 'yerAdi', 'Başlıksız Öneri', doc.id),
+      ipucuMetni: _getString(data, 'ipucuMetni', 'Keşfetmek için dokun...', doc.id),
+      gorselUrl: _getNullableString(data, 'gorselUrl', doc.id),
     );
   }
+
+  // Modeli Firestore'a yazmak veya API'ye göndermek için JSON'a dönüştürme
+  Map<String, dynamic> toJson() {
+    return {
+      // 'id' genellikle Firestore belgesinin adı olduğu için data kısmına yazılmaz.
+      // Eğer data içinde de saklamak isterseniz ekleyebilirsiniz: 'id': id,
+      'yerAdi': yerAdi,
+      'ipucuMetni': ipucuMetni,
+      if (gorselUrl != null) 'gorselUrl': gorselUrl, // Sadece null değilse ekle
+    };
+  }
+
+  // Modelin bir kopyasını bazı alanları güncelleyerek oluşturmak için
+  OneriModeli copyWith({
+    String? id,
+    String? yerAdi,
+    String? ipucuMetni,
+    String? gorselUrl, // Nullable yapmak için `String?` veya özel bir değer (örn. Object())
+    bool? clearGorselUrl, // gorselUrl'i null yapmak için
+  }) {
+    return OneriModeli(
+      id: id ?? this.id,
+      yerAdi: yerAdi ?? this.yerAdi,
+      ipucuMetni: ipucuMetni ?? this.ipucuMetni,
+      gorselUrl: clearGorselUrl == true ? null : (gorselUrl ?? this.gorselUrl),
+    );
+  }
+
+  // Equatable için hangi alanların karşılaştırılacağını belirtir
+  @override
+  List<Object?> get props => [id, yerAdi, ipucuMetni, gorselUrl];
+
+// Eğer Equatable kullanmak istemezseniz, hashCode ve == operatörünü manuel olarak override edebilirsiniz:
+/*
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is OneriModeli &&
+        other.id == id &&
+        other.yerAdi == yerAdi &&
+        other.ipucuMetni == ipucuMetni &&
+        other.gorselUrl == gorselUrl;
+  }
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      yerAdi.hashCode ^
+      ipucuMetni.hashCode ^
+      gorselUrl.hashCode;
+  */
 }

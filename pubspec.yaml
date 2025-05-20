@@ -50,6 +50,7 @@ dependencies:
   cached_network_image:
   flutter_launcher_icons:
   intl:
+  equatable:
 
 dev_dependencies:
   flutter_test:
