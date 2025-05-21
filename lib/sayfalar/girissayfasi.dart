@@ -1,12 +1,12 @@
-// girissayfasi.dart (Provider ve Modernize Edilmiş Hali)
+// lib/sayfalar/girissayfasi.dart
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // FirebaseAuthException için
-import 'package:pathbooks/servisler/firestoreseervisi.dart';
-import 'package:provider/provider.dart'; // Provider importu
-import 'package:pathbooks/modeller/kullanici.dart'; // Kullanici modeli (kullanılmasa da importu kalabilir)
-import 'package:pathbooks/servisler/firestoreseervisi.dart'; // Firestore servisi importu (Doğru yolu kontrol et!)
-import 'package:pathbooks/servisler/yetkilendirmeservisi.dart'; // Yetkilendirme servisi importu
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:pathbooks/servisler/firestoreseervisi.dart'; // Bu import çift görünüyor, biri kaldırılabilir.
+import 'package:provider/provider.dart';
+import 'package:pathbooks/modeller/kullanici.dart';
+// import 'package:pathbooks/servisler/firestoreseervisi.dart'; // Zaten yukarıda var
+import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
 
 class Girissayfasi extends StatefulWidget {
   const Girissayfasi({Key? key}) : super(key: key);
@@ -17,10 +17,9 @@ class Girissayfasi extends StatefulWidget {
 
 class _GirissayfasiState extends State<Girissayfasi> {
   final _formKey = GlobalKey<FormState>();
-  // Controller'lar initState içinde başlatılacak
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
-  bool _isLoading = false; // Yüklenme durumunu takip etmek için
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -29,28 +28,27 @@ class _GirissayfasiState extends State<Girissayfasi> {
     _passwordController = TextEditingController();
   }
 
-  // Hata mesajları için Snackbar gösteren yardımcı metot
   void _showErrorSnackbar(String message) {
-    // Eğer widget hala ağaçtaysa (sayfadan ayrılmadıysa) Snackbar göster
     if (mounted) {
-      ScaffoldMessenger.of(context).removeCurrentSnackBar(); // Varsa önceki Snackbar'ı kaldır
+      ScaffoldMessenger.of(context).removeCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: Theme.of(context).colorScheme.error, // Temanın hata rengini kullan
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 3),
         ),
       );
     }
   }
 
-  // Başarı mesajları için Snackbar gösteren yardımcı metot
   void _showSuccessSnackbar(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).removeCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: Colors.green, // Başarı için yeşil renk
+          backgroundColor: Colors.green[600],
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -58,39 +56,27 @@ class _GirissayfasiState extends State<Girissayfasi> {
 
   @override
   void dispose() {
-    // Controller'ları temizle
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  // --- E-posta/Şifre ile Giriş Yapma Metodu ---
   void _girisYap() async {
-    // Form geçerli değilse veya zaten bir işlem yapılıyorsa metottan çık
     if (!(_formKey.currentState?.validate() ?? false) || _isLoading) {
+      if (!(_formKey.currentState?.validate() ?? false)) _showErrorSnackbar('Lütfen tüm alanları doğru doldurun.');
       return;
     }
-
-    setState(() { _isLoading = true; }); // Yüklenme durumunu başlat
-    FocusScope.of(context).unfocus(); // Açık klavye varsa kapat
-
-    // YetkilendirmeServisi'ni Provider'dan al ('read' yeterli, çünkü sadece metot çağırıyoruz)
+    setState(() { _isLoading = true; });
+    FocusScope.of(context).unfocus();
     final yetkilendirmeServisi = context.read<YetkilendirmeServisi>();
-
     try {
-      // Yetkilendirme Servisi üzerinden giriş yapmayı dene
       await yetkilendirmeServisi.girisYap(
-        email: _emailController.text.trim(), // E-postanın başındaki/sonundaki boşlukları temizle
-        password: _passwordController.text, // Şifreyi olduğu gibi gönder (boşluklar önemli olabilir)
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
-      // Başarılı giriş sonrası manuel yönlendirme YAPMA.
-      // Provider'dan gelen state değişikliği ile Yonlendirme widget'ı AnaSayfa'yı gösterecek.
-      print("E-posta/Şifre ile giriş başarılı.");
-
+      // Başarılı giriş sonrası yönlendirme Provider ile otomatik olacak.
     } on FirebaseAuthException catch (e) {
-      // Firebase Authentication'a özel hataları yakala ve kullanıcıya uygun mesaj göster
-      String errorMessage = "Giriş sırasında bir hata oluştu."; // Varsayılan mesaj
-      // Yaygın hata kodlarına göre mesajı özelleştir
+      String errorMessage = "Giriş sırasında bir hata oluştu.";
       if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
         errorMessage = "E-posta veya şifre hatalı.";
       } else if (e.code == 'invalid-email') {
@@ -98,301 +84,273 @@ class _GirissayfasiState extends State<Girissayfasi> {
       } else if (e.code == 'user-disabled') {
         errorMessage = "Hesabınız devre dışı bırakılmış.";
       } else {
-        // Diğer Firebase hataları için genel bir mesaj ve loglama
-        errorMessage = "Bir kimlik doğrulama hatası oluştu. Lütfen tekrar deneyin.";
-        print("Firebase Auth Error Code (Giriş): ${e.code} - ${e.message}");
+        errorMessage = "Bir kimlik doğrulama hatası oluştu.";
+        print("Firebase Auth Error (Giriş): ${e.code} - ${e.message}");
       }
-      _showErrorSnackbar(errorMessage); // Hata mesajını göster
-
+      _showErrorSnackbar(errorMessage);
     } catch (e) {
-      // Diğer beklenmedik hataları yakala (Ağ hatası vb.)
       print("Giriş Hatası (Diğer): ${e.toString()}");
-      _showErrorSnackbar('Beklenmedik bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.');
-
+      _showErrorSnackbar('Beklenmedik bir hata oluştu. Bağlantınızı kontrol edin.');
     } finally {
-      // İşlem bitince (başarılı veya başarısız) yükleme durumunu kapat
-      // Widget hala ekranda ise setState çağır
-      if (mounted) {
-        setState(() { _isLoading = false; });
-      }
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
 
-  // --- Google ile Giriş Yapma Metodu ---
   void _googleIleGirisYap() async {
-    if (_isLoading) return; // Zaten işlem varsa tekrar başlatma
+    if (_isLoading) return;
     setState(() => _isLoading = true);
-    print("Google ile giriş başlatılıyor...");
-
-    // Servisleri Provider'dan al
     final yetkilendirmeServisi = context.read<YetkilendirmeServisi>();
-    final firestoreServisi = context.read<FirestoreServisi>(); // Firestore servisini de al
-
+    final firestoreServisi = context.read<FirestoreServisi>();
     try {
-      // Yetkilendirme Servisi üzerinden Google ile giriş yapmayı dene
       final Kullanici? girisYapanKullanici = await yetkilendirmeServisi.googleIleGiris();
-
-      // Giriş başarılı ve kullanıcı bilgisi alındıysa devam et
       if (girisYapanKullanici != null) {
-        print("Google ile Auth başarılı: ${girisYapanKullanici.id}");
-
-        // Firestore'da kullanıcı var mı kontrol et (kullaniciGetir metodu olduğunu varsayıyoruz)
-        print("Firestore kontrol ediliyor...");
         final Kullanici? mevcutFirestoreKullanici = await firestoreServisi.kullaniciGetir(girisYapanKullanici.id);
-
-        // Firestore'da kullanıcı yoksa yeni belge oluştur
         if (mevcutFirestoreKullanici == null) {
-          print("Firestore'da kullanıcı bulunamadı, oluşturuluyor...");
           await firestoreServisi.kullaniciOlustur(
             id: girisYapanKullanici.id,
-            email: girisYapanKullanici.email ?? '', // Null ise boş string
-            // Google'dan gelen DisplayName'i kullan, null ise boş string
-            kullaniciAdi: girisYapanKullanici.kullaniciAdi ?? '', fotoUrl: '',
-            // Kullanici modelinizde fotoUrl varsa:
-            // fotoUrl: girisYapanKullanici.fotoUrl,
+            email: girisYapanKullanici.email ?? '',
+            kullaniciAdi: girisYapanKullanici.kullaniciAdi ?? girisYapanKullanici.email?.split('@')[0] ?? '', // Kullanıcı adı için fallback
+            fotoUrl: girisYapanKullanici.fotoUrl ?? '', // Google'dan gelen fotoUrl'i kullan
           );
-          print("Yeni Firestore kullanıcısı oluşturuldu.");
-        } else {
-          print("Firestore kullanıcısı zaten mevcut.");
-          // İsteğe bağlı: Mevcut Firestore belgesini güncelleyebilirsiniz.
         }
-        // Başarılı giriş ve Firestore işlemi sonrası yönlendirme otomatik olacak.
-        print("Google ile giriş ve Firestore işlemi tamamlandı.");
-
-      } else {
-        // Google girişi iptal edildi veya Auth servisi null döndürdü.
-        print("Google ile giriş Auth sonucu null veya iptal edildi.");
-        // İsteğe bağlı olarak kullanıcıya "Giriş iptal edildi" mesajı gösterilebilir.
-        // _showErrorSnackbar("Google ile giriş iptal edildi.");
       }
-
     } on FirebaseAuthException catch (e) {
-      print("Google Giriş Hatası (FirebaseAuthException UI): ${e.code} - ${e.message}");
-      _showErrorSnackbar("Google ile giriş yapılamadı. Hesap farklı bir yöntemle oluşturulmuş olabilir.");
-    } catch (e, stackTrace) {
-      print("Google Giriş Hatası (Diğer UI): ${e.toString()}");
-      print("Stack Trace:\n$stackTrace");
-      _showErrorSnackbar("Google ile giriş sırasında bir hata oluştu: ${e.toString()}");
+      _showErrorSnackbar("Google ile giriş yapılamadı: ${e.message}");
+    } catch (e) {
+      _showErrorSnackbar("Google ile giriş sırasında bir hata oluştu.");
     } finally {
-      if (mounted) {
-        print("Google ile giriş işlemi finally bloğu.");
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // --- Şifre Sıfırlama Metodu ---
   void _sifremiUnuttum() async {
     final email = _emailController.text.trim();
-    // E-posta alanı geçerli mi kontrol et
     if (email.isEmpty || !email.contains('@')) {
-      _showErrorSnackbar("Lütfen geçerli e-posta adresinizi girin.");
+      _showErrorSnackbar("Şifre sıfırlama için geçerli e-posta adresinizi girin.");
       return;
     }
-    if (_isLoading) return; // Zaten işlem varsa tekrar başlatma
-
+    if (_isLoading) return;
     if(mounted) setState(() => _isLoading = true);
-    FocusScope.of(context).unfocus(); // Klavyeyi kapat
-
-    // YetkilendirmeServisi'ni Provider'dan al
+    FocusScope.of(context).unfocus();
     final yetkilendirmeServisi = context.read<YetkilendirmeServisi>();
-
     try {
-      // Şifre sıfırlama e-postası göndermeyi dene
       await yetkilendirmeServisi.sifreSifirla(email: email);
-      // Başarı mesajı göster
-      if (mounted) {
-        _showSuccessSnackbar('Şifre sıfırlama bağlantısı $email adresine gönderildi (Gereksiz/Spam klasörünü kontrol etmeyi unutmayın).');
-      }
+      if (mounted) _showSuccessSnackbar('Şifre sıfırlama bağlantısı $email adresine gönderildi.');
     } on FirebaseAuthException catch (e) {
-      // Firebase Auth hatalarını yakala
       String message = "Şifre sıfırlama e-postası gönderilemedi.";
-      if(e.code == 'user-not-found'){
-        message = "Bu e-posta adresi ile kayıtlı bir kullanıcı bulunamadı.";
-      } else if (e.code == 'invalid-email') {
-        message = "Geçersiz e-posta formatı.";
-      }
-      print("Şifre Sıfırlama Hatası (FirebaseAuthException): ${e.code}");
+      if(e.code == 'user-not-found') message = "Bu e-posta ile kayıtlı kullanıcı bulunamadı.";
+      else if (e.code == 'invalid-email') message = "Geçersiz e-posta formatı.";
       _showErrorSnackbar(message);
     } catch (e) {
-      // Diğer hatalar
-      print("Şifre Sıfırlama Hatası (Diğer): ${e.toString()}");
       _showErrorSnackbar('Şifre sıfırlama sırasında bir hata oluştu.');
     } finally {
-      // İşlem bitince yüklemeyi durdur
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // HesapOlustur sayfasındaki gibi bir InputDecoration stili
+  InputDecoration _getInputDecoration(BuildContext context, String label, IconData prefixIcon) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.grey[400], fontSize: 14.5),
+      hintStyle: TextStyle(color: Colors.grey[600], fontSize: 15),
+      prefixIcon: Icon(prefixIcon, color: Colors.grey[500], size: 20),
+      filled: true,
+      fillColor: theme.inputDecorationTheme.fillColor ?? colorScheme.surface.withOpacity(0.07),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: Colors.grey[700]!, width: 0.8),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.7), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: colorScheme.error, width: 1.2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: colorScheme.error, width: 1.8),
+      ),
+    );
   }
 
 
   @override
   Widget build(BuildContext context) {
-    // Tema bilgilerini alarak UI elemanlarını oluştur
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
     return Scaffold(
-      // Scaffold arka plan rengi otomatik olarak temadan gelir
-      body: SafeArea( // Ekranın güvenli alanlarında kalmasını sağlar (örn. çentik altı)
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 25.0),
             child: Form(
               key: _formKey,
-              child: ListView( // Çok fazla eleman varsa kaydırma sağlar
-                shrinkWrap: true, // İçeriğe göre boyut almasını sağlar
+              child: ListView(
+                shrinkWrap: true,
                 children: <Widget>[
-                  const SizedBox(height: 40.0), // Üst boşluk
+                  // Yüklenme göstergesi
+                  if (_isLoading)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20.0),
+                      child: LinearProgressIndicator(
+                        minHeight: 3,
+                        backgroundColor: Colors.transparent,
+                        color: colorScheme.primary.withOpacity(0.7),
+                      ),
+                    )
+                  else // Yüklenmiyorsa normal boşluk
+                    const SizedBox(height: 40.0),
 
-                  Center(
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 50.0, top: 10.0), // Boşluk ayarlandı
                     child: Text(
                       'PATHBOOK',
+                      textAlign: TextAlign.center,
                       style: textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Bebas', // Bebas fontunu burada kullandık
-                        color: colorScheme.onBackground,
-                        fontSize: 60,
+                        fontFamily: 'Bebas',
+                        color: colorScheme.onBackground.withOpacity(0.9),
+                        fontSize: 56, // HesapOlustur ile aynı
                         letterSpacing: 1.5,
-
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 60.0), // Başlık ve form arası boşluk
-
-                  // E-posta Giriş Alanı
                   TextFormField(
                     controller: _emailController,
-                    autocorrect: false, // Otomatik düzeltmeyi kapat
-                    keyboardType: TextInputType.emailAddress, // Klavye tipini ayarla
-                    textInputAction: TextInputAction.next, // Klavyede "sonraki" tuşu
-                    style: TextStyle(color: colorScheme.onSurface), // Temadan yazı rengi
-                    decoration: InputDecoration( // Tema varsayılanlarını kullanır
-                      labelText: "E-posta",
-                      hintText: "ornek@eposta.com", // Yardımcı metin
-                      prefixIcon: const Icon(Icons.mail_outline), // İkon
-                    ),
-                    validator: (value) { // Doğrulama mantığı
+                    enabled: !_isLoading,
+                    autocorrect: false,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+                    decoration: _getInputDecoration(context, "E-posta Adresi", Icons.mail_outline_rounded),
+                    validator: (value) {
                       final email = value?.trim() ?? '';
                       if (email.isEmpty) return 'E-posta alanı boş bırakılamaz.';
-                      if (!email.contains('@') || !email.contains('.')) return 'Geçerli bir e-posta adresi giriniz.';
-                      return null; // Geçerliyse null döndür
-                    },
-                  ),
-                  const SizedBox(height: 25.0), // Alanlar arası boşluk
-
-                  // Şifre Giriş Alanı
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true, // Şifreyi gizle
-                    textInputAction: TextInputAction.done, // Klavyede "bitti" tuşu
-                    style: TextStyle(color: colorScheme.onSurface),
-                    decoration: InputDecoration(
-                      labelText: "Şifre",
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      // İsteğe bağlı: Şifre gösterme/gizleme butonu eklenebilir (suffixIcon)
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Şifre alanı boş bırakılamaz.';
-                      // Giriş ekranında genellikle minimum uzunluk kontrolü yapılmaz.
+                      if (!RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(email)) {
+                        return 'Geçerli bir e-posta adresi giriniz.';
+                      }
                       return null;
                     },
-                    // Klavyeden "bitti" tuşuna basıldığında girişi tetikle
+                  ),
+                  const SizedBox(height: 18.0),
+
+                  TextFormField(
+                    controller: _passwordController,
+                    enabled: !_isLoading,
+                    obscureText: true,
+                    textInputAction: TextInputAction.done,
+                    style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+                    decoration: _getInputDecoration(context, "Şifre", Icons.lock_outline_rounded),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Şifre alanı boş bırakılamaz.';
+                      return null;
+                    },
                     onFieldSubmitted: (_) => _isLoading ? null : _girisYap(),
                   ),
-                  const SizedBox(height: 40.0), // Şifre alanı ve butonlar arası boşluk
+                  const SizedBox(height: 30.0),
 
-                  // Giriş/Kayıt Butonları veya Yüklenme Göstergesi
-                  _isLoading
-                      ? Center(child: CircularProgressIndicator(color: colorScheme.primary)) // Yükleniyorsa gösterge
-                      : Column( // Yüklenmiyorsa butonları göster
-                    crossAxisAlignment: CrossAxisAlignment.stretch, // Butonları genişlet
-                    children: [
-                      // Giriş Yap Butonu
-                      ElevatedButton(
-                        onPressed: _girisYap, // Tanımlanan metodu çağır
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromRGBO(139, 0, 0, 1), // Koyu kırmızı
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text(
-                          "Giriş Yap",
-                          style: TextStyle(
-                            fontFamily: 'Bebas',
-                            fontSize: 20,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 15.0), // Butonlar arası boşluk
-
-                      // Hesap Oluştur Butonu
-                      ElevatedButton(
-                        onPressed: () {
-                          // Hesap Oluştur sayfasına gitmek için pushNamed kullan
-                          Navigator.of(context).pushNamed('/hesapOlustur');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromRGBO(139, 0, 0, 1), // Koyu kırmızı
-                          foregroundColor: Colors.white,
-                        ), // Tema stilini kullan
-                        child: const Text(
-                          "Hesap Oluştur",
-                          style: TextStyle(
-                            fontFamily: 'Bebas',
-                            fontSize: 20,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 35.0), // "veya" öncesi boşluk
-                      Center(child: Text("veya", style: textTheme.bodySmall?.copyWith(color: Colors.grey[500]))),
-                      const SizedBox(height: 25.0), // "veya" sonrası boşluk
-
-                      // Google ile Giriş Yap Butonu
-                      TextButton(
-                        onPressed: _googleIleGirisYap, // Tanımlanan metodu çağır
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          foregroundColor: colorScheme.onBackground,
-                        ),
-                        child: const Text(
-                          "Google ile Giriş Yap",
-                          style: TextStyle(
-                            fontFamily: 'Bebas',
-                            fontSize: 20,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+                  // Giriş Butonu
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _girisYap,
+                    style: theme.elevatedButtonTheme.style?.copyWith(
+                        backgroundColor: MaterialStateProperty.all(const Color.fromRGBO(139, 0, 0, 1).withOpacity(_isLoading ? 0.5 : 1)), // Koyu kırmızı, yüklenirken opak
+                        padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 15)),
+                        textStyle: MaterialStateProperty.all(
+                            theme.textTheme.labelLarge?.copyWith(fontSize: 18, letterSpacing: 1.1, fontWeight: FontWeight.bold, fontFamily: 'Bebas', color: Colors.white) // Font ayarlandı
+                        )
+                    ),
+                    child: _isLoading && (ModalRoute.of(context)?.isCurrent ?? false) // Sadece bu sayfa aktifken ve yükleniyorsa göster
+                        ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white70)))
+                        : const Text("Giriş Yap"),
                   ),
+                  const SizedBox(height: 12.0),
 
-                  // Şifremi Unuttum Linki
+                  // Hesap Oluştur Butonu
+                  TextButton(
+                    onPressed: _isLoading ? null : () => Navigator.of(context).pushNamed('/hesapOlustur'),
+                    style: theme.textButtonTheme.style?.copyWith(
+                      padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 12)),
+                    ),
+                    child: Text(
+                      "Hesabın yok mu? Kayıt Ol",
+                      style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.primary.withOpacity(0.9), // Temadan birincil renk
+                          fontFamily: 'Bebas', // Bebas fontu
+                          fontSize: 16,
+                          letterSpacing: 0.8,
+                          fontWeight: FontWeight.w600
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20.0),
-                  // Yükleme sırasında bu butonu gösterme/devre dışı bırak
+
+                  // "veya" ve Google Butonu
+                  if (!_isLoading) // Yüklenirken gösterme
+                    Column(
+                      children: [
+                        Row(
+                          children: <Widget>[
+                            Expanded(child: Divider(color: Colors.grey[700], thickness: 0.5)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                              child: Text("VEYA", style: textTheme.bodySmall?.copyWith(color: Colors.grey[500], fontSize: 11, letterSpacing: 0.5)),
+                            ),
+                            Expanded(child: Divider(color: Colors.grey[700], thickness: 0.5)),
+                          ],
+                        ),
+                        const SizedBox(height: 20.0),
+                        OutlinedButton.icon( // Google butonu için OutlinedButton daha şık olabilir
+
+                          label: Text(
+                            "Google ile Devam Et",
+                            style: TextStyle(
+                                fontFamily: 'OpenSans', // Google için daha standart bir font
+                                fontSize: 14,
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w600
+                            ),
+                          ),
+                          onPressed: _isLoading ? null : _googleIleGirisYap,
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.grey[700]!, width: 1.0),
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 15.0),
+
+                  // Şifremi Unuttum
                   if (!_isLoading)
                     Center(
                       child: TextButton(
-                        onPressed: _sifremiUnuttum, // Tanımlanan metodu çağır
-                        style: theme.textButtonTheme.style, // Tema stilini kullan
-                        child: const Text(
+                        onPressed: _sifremiUnuttum,
+                        child: Text(
                           "Şifremi Unuttum?",
-                          style: TextStyle(
-                            fontFamily: 'Bebas',
-                            fontSize: 15,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.bold,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Colors.grey[500],
+                            fontFamily: 'OpenSans', // Daha standart bir font
+                            fontSize: 13,
                           ),
                         ),
                       ),
                     ),
-
-                  const SizedBox(height: 40.0), // En alt boşluk
+                  const SizedBox(height: 30.0),
                 ],
               ),
             ),

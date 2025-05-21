@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:provider/provider.dart';
-import 'package:dotted_border/dotted_border.dart'; // Çoklu resim ekleme alanı için
-// LÜTFEN DİKKAT: Servis dosyanızın adı 'firestoreseervisi.dart' ise bu doğru.
+import 'package:dotted_border/dotted_border.dart';
 import 'package:pathbooks/servisler/firestoreseervisi.dart';
 import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
 
@@ -17,8 +16,8 @@ class GonderiEkleSayfasi extends StatefulWidget {
 }
 
 class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
-  List<File> _secilenResimler = []; // ÇOKLU RESİM İÇİN DEĞİŞTİ
-  final int _maxResimSayisi = 5;    // Maksimum resim sayısı
+  List<File> _secilenResimler = [];
+  final int _maxResimSayisi = 5;
   String? _secilenPano;
   final List<String> _panoSecenekleri = const [
     "Doğa", "Tarih", "Kültür", "Yeme-İçme"
@@ -28,19 +27,16 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
   bool _yukleniyor = false;
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _baslikController = TextEditingController();
   final TextEditingController _aciklamaController = TextEditingController();
-  final TextEditingController _baglantiController = TextEditingController();
   final TextEditingController _konumController = TextEditingController();
 
+  // Cloudinary bilgileri (bunları güvenli bir yerden çekmek daha iyi olabilir)
   final String cloudinaryCloudName = "dt4jjawbe";
   final String cloudinaryUploadPreset = "pathbooks";
 
   @override
   void dispose() {
-    _baslikController.dispose();
     _aciklamaController.dispose();
-    _baglantiController.dispose();
     _konumController.dispose();
     super.dispose();
   }
@@ -54,10 +50,7 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
 
     try {
       if (sourceFromButton == ImageSource.gallery) {
-        final List<XFile>? pickedFiles = await _picker.pickMultiImage(
-          imageQuality: 70,
-          maxWidth: 1080,
-        );
+        final List<XFile>? pickedFiles = await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1080);
         if (pickedFiles != null && pickedFiles.isNotEmpty) {
           if (mounted) {
             setState(() {
@@ -73,13 +66,11 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
           }
         }
       } else if (sourceFromButton == ImageSource.camera) {
-        if (_secilenResimler.length >= _maxResimSayisi) {
+        if (_secilenResimler.length >= _maxResimSayisi) { // Bu kontrol _resimSecimMenusuGoster içinde de var ama burada da olması iyi.
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("En fazla $_maxResimSayisi resim ekleyebilirsiniz.")));
           return;
         }
-        final XFile? pickedFile = await _picker.pickImage(
-          source: ImageSource.camera, imageQuality: 70, maxWidth: 1080,
-        );
+        final XFile? pickedFile = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 1080);
         if (pickedFile != null) {
           if (mounted) setState(() => _secilenResimler.add(File(pickedFile.path)));
         }
@@ -91,39 +82,38 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
   }
 
   void _resimSecimMenusuGoster() {
-    // Eğer hiç resim yoksa veya limit dolmadıysa modalı göster
-    if (_secilenResimler.isEmpty || _secilenResimler.length < _maxResimSayisi) {
-      showModalBottomSheet(
-        context: context, backgroundColor: Colors.grey[900],
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20.0))),
-        builder: (BuildContext bc) {
-          return SafeArea(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Wrap(children: <Widget>[
-                if (_secilenResimler.length < _maxResimSayisi) // Galeri seçeneğini limit dolmadıysa göster
-                  ListTile(
-                    leading: const Icon(Icons.photo_library_outlined, color: Colors.white70),
-                    title: const Text('Galeriden Seç (Çoklu)', style: TextStyle(color: Colors.white)),
-                    onTap: () { Navigator.of(context).pop(); _resimSec(sourceFromButton: ImageSource.gallery); },
-                  ),
-                if (_secilenResimler.length < _maxResimSayisi) // Kamera seçeneğini limit dolmadıysa göster
-                  ListTile(
-                    leading: const Icon(Icons.camera_alt_outlined, color: Colors.white70),
-                    title: const Text('Kameradan Çek (Tek)', style: TextStyle(color: Colors.white)),
-                    onTap: () { Navigator.of(context).pop(); _resimSec(sourceFromButton: ImageSource.camera); },
-                  ),
-              ]),
-            ),
-          );
-        },
-      );
-    } else {
+    if (_yukleniyor) return;
+    if (_secilenResimler.length >= _maxResimSayisi) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Maksimum resim sayısına ulaştınız.")));
+      return;
     }
+    showModalBottomSheet(
+      context: context, backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20.0))),
+      builder: (BuildContext bc) {
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Wrap(children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: Colors.white70),
+                title: const Text('Galeriden Seç (Çoklu)', style: TextStyle(color: Colors.white)),
+                onTap: () { Navigator.of(context).pop(); _resimSec(sourceFromButton: ImageSource.gallery); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined, color: Colors.white70),
+                title: const Text('Kameradan Çek (Tek)', style: TextStyle(color: Colors.white)),
+                onTap: () { Navigator.of(context).pop(); _resimSec(sourceFromButton: ImageSource.camera); },
+              ),
+            ]),
+          ),
+        );
+      },
+    );
   }
 
   void _resimKaldir(int index) {
+    if (_yukleniyor) return;
     if (mounted) {
       setState(() {
         _secilenResimler.removeAt(index);
@@ -132,15 +122,12 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
   }
 
   Future<String?> _resmiCloudinaryeYukle(File resimDosyasi) async {
-    // Bu fonksiyon değişmeden kalabilir, tek bir dosyayı yükler.
-    // _gonderiOlustur içinde döngüyle çağrılacak.
     try {
       final cloudinary = CloudinaryPublic(cloudinaryCloudName, cloudinaryUploadPreset, cache: false);
       CloudinaryResponse response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(resimDosyasi.path, resourceType: CloudinaryResourceType.Image),
       );
-      if (response.secureUrl.isNotEmpty) return response.secureUrl;
-      return null;
+      return response.secureUrl.isNotEmpty ? response.secureUrl : null;
     } catch (e) {
       print("Cloudinary yükleme istisnası: $e");
       return null;
@@ -149,46 +136,41 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
 
   Future<void> _gonderiOlustur() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_secilenResimler.isEmpty) { // ÇOKLU RESİM KONTROLÜ
+    if (_secilenResimler.isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lütfen en az bir resim seçin.")));
+      return;
+    }
+    if (_secilenPano == null || _secilenPano!.isEmpty) { // Pano seçimi kontrolü
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lütfen bir pano seçin.")));
       return;
     }
 
     if (_yukleniyor) return;
     if (mounted) setState(() => _yukleniyor = true);
 
-    List<String> yuklenenResimUrls = []; // YÜKLENEN TÜM URL'LERİ TOPLA
+    List<String> yuklenenResimUrls = [];
     try {
-      for (File resimDosyasi in _secilenResimler) { // HER BİR RESMİ YÜKLE
+      for (File resimDosyasi in _secilenResimler) {
         String? url = await _resmiCloudinaryeYukle(resimDosyasi);
         if (url != null) {
           yuklenenResimUrls.add(url);
         } else {
-          // Bir resim yüklenemezse işlemi durdur ve kullanıcıyı bilgilendir.
-          throw Exception("Bir resim Cloudinary'e yüklenemedi.");
+          throw Exception("Bir resim yüklenemedi. Lütfen internet bağlantınızı kontrol edin.");
         }
       }
 
-      if (yuklenenResimUrls.isEmpty || yuklenenResimUrls.length != _secilenResimler.length) {
-        // Bu durum yukarıdaki throw Exception ile yakalanmalı ama yine de bir kontrol.
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tüm resimler yüklenemedi. Lütfen tekrar deneyin.")));
-        if (mounted) setState(() => _yukleniyor = false);
-        return;
+      if (yuklenenResimUrls.length != _secilenResimler.length) {
+        throw Exception("Tüm resimler yüklenemedi.");
       }
 
       final String? aktifKullaniciId = Provider.of<YetkilendirmeServisi>(context, listen: false).aktifKullaniciId;
       if (aktifKullaniciId == null) {
-        // ... (oturum hatası kısmı aynı kalır)
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Oturum hatası. Lütfen tekrar giriş yapın.")));
-          setState(() => _yukleniyor = false);
-        }
-        return;
+        throw Exception("Oturum hatası. Lütfen tekrar giriş yapın.");
       }
 
       await Provider.of<FirestoreServisi>(context, listen: false).gonderiOlustur(
         yayinlayanId: aktifKullaniciId,
-        gonderiResmiUrls: yuklenenResimUrls, // TÜM URL LİSTESİNİ GÖNDER
+        gonderiResmiUrls: yuklenenResimUrls,
         aciklama: _aciklamaController.text.trim(),
         kategori: _secilenPano!,
         konum: _konumController.text.trim().isNotEmpty ? _konumController.text.trim() : null,
@@ -196,76 +178,80 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Pin başarıyla oluşturuldu!"), backgroundColor: Colors.green),
+          const SnackBar(content: Text("Paylaşım başarıyla oluşturuldu!"), backgroundColor: Colors.green),
         );
+        // Formu ve state'i temizle
         setState(() {
-          _secilenResimler.clear(); // TÜM SEÇİLEN RESİMLERİ TEMİZLE
+          _secilenResimler.clear();
           _secilenPano = null;
-          _baslikController.clear();
           _aciklamaController.clear();
-          _baglantiController.clear();
           _konumController.clear();
-          _formKey.currentState?.reset();
+          _formKey.currentState?.reset(); // Dropdown'ı da sıfırlar
         });
-        await Future.delayed(const Duration(seconds: 1));
-        if (Navigator.canPop(context)) Navigator.pop(context, true);
+        // Bir önceki sayfaya başarı bilgisiyle dön
+        // Kısa bir gecikme, SnackBar'ın görünmesi için
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context, true); // true değeri, bir önceki sayfanın yenileme yapması gerektiğini belirtir
+        }
       }
     } catch (e) {
-      print("Pin oluşturma sürecinde genel hata: $e");
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Pin oluşturulurken bir hata oluştu: ${e.toString().length > 100 ? e.toString().substring(0,100) : e.toString()}"), backgroundColor: Colors.redAccent));
+      print("Pin oluşturma sürecinde hata: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gönderi oluşturulamadı: ${e.toString().length > 100 ? e.toString().substring(0,100) + "..." : e.toString()}"), backgroundColor: Colors.redAccent));
     } finally {
       if (mounted) setState(() => _yukleniyor = false);
     }
   }
 
-  Widget _buildLoadingOverlay() { /* ... (değişiklik yok) ... */
+  Widget _buildLoadingOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.75),
+      color: Colors.black.withOpacity(0.65),
       child: Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent)),
-          const SizedBox(height: 20),
-          const Text("Yükleniyor...", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
-        ]),
+        child: Container(
+          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+              color: Colors.grey[850],
+              borderRadius: BorderRadius.circular(10)
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent[100]!)),
+            const SizedBox(height: 18),
+            Text("Paylaşılıyor...", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16, fontWeight: FontWeight.w500)),
+          ]),
+        ),
       ),
     );
   }
 
-  Widget _buildImagePreviewsAndPicker() {
+  Widget _buildImagePreviewsAndPicker() { /* ... (Bir önceki mesajdaki gibi, tam haliyle) ... */
     return Column(
       children: [
-        // Seçilen Resimlerin Önizlemesi
         if (_secilenResimler.isNotEmpty)
           Container(
-            height: 120, // Önizleme alanının yüksekliği
+            height: 110, // Biraz daha kompakt
             margin: const EdgeInsets.only(bottom: 16.0, top:10.0),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: _secilenResimler.length,
               itemBuilder: (context, index) {
                 return Padding(
-                  padding: const EdgeInsets.only(right: 10.0),
+                  padding: const EdgeInsets.only(right: 8.0), // Resimler arası boşluk
                   child: Stack(
-                    clipBehavior: Clip.none, // İkonun dışarı taşabilmesi için
+                    clipBehavior: Clip.none,
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          _secilenResimler[index],
-                          width: 100, height: 100, fit: BoxFit.cover,
-                        ),
+                        borderRadius: BorderRadius.circular(10), // Daha az yuvarlak
+                        child: Image.file(_secilenResimler[index], width: 90, height: 90, fit: BoxFit.cover),
                       ),
                       Positioned(
-                        top: -8, right: -8,
+                        top: -10, right: -10, // Konum ayarlandı
                         child: InkWell(
                           onTap: _yukleniyor ? null : () => _resimKaldir(index),
+                          borderRadius: BorderRadius.circular(12), // Tıklama alanı için
                           child: Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle),
+                            child: Icon(Icons.close_rounded, color: Colors.white, size: 16), // İkon boyutu
                           ),
                         ),
                       ),
@@ -275,116 +261,105 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
               },
             ),
           ),
-
-        // Resim Ekleme Alanı
         if (_secilenResimler.length < _maxResimSayisi)
           GestureDetector(
             onTap: _yukleniyor ? null : _resimSecimMenusuGoster,
             child: DottedBorder(
-              color: Colors.grey[700]!,
-              strokeWidth: 1.5,
-              borderType: BorderType.RRect,
-              radius: const Radius.circular(16),
-              dashPattern: const [8, 6],
+              color: Colors.grey[700]!, strokeWidth: 1.2, borderType: BorderType.RRect,
+              radius: const Radius.circular(12), dashPattern: const [6, 5], // Desen ayarlandı
               child: Container(
-                height: _secilenResimler.isEmpty ? 180 : 80, // Resim yoksa daha büyük, varsa daha küçük
-                // width: double.infinity, // DottedBorder zaten genişliği kaplar
-                decoration: BoxDecoration(
-                  // color: Colors.grey[850]?.withOpacity(0.7), // Hafif arka plan
-                  borderRadius: BorderRadius.circular(15), // DottedBorder ile aynı
-                ),
+                height: _secilenResimler.isEmpty ? 150 : 70, // Yükseklik ayarlandı
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(11)),
                 child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_photo_alternate_outlined, color: Colors.grey[500], size: _secilenResimler.isEmpty ? 40 : 30),
-                      SizedBox(height: _secilenResimler.isEmpty ? 10 : 4),
-                      Text(
-                          _secilenResimler.isEmpty ? "Resim seçin (En fazla $_maxResimSayisi)" : "Daha fazla resim ekle (${_maxResimSayisi - _secilenResimler.length} kaldı)",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey[500], fontSize: _secilenResimler.isEmpty ? 15 : 13, fontWeight: FontWeight.w500)
-                      ),
-                    ],
-                  ),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.add_a_photo_outlined, color: Colors.grey[600], size: _secilenResimler.isEmpty ? 35 : 25),
+                    SizedBox(height: _secilenResimler.isEmpty ? 8 : 3),
+                    Text(
+                        _secilenResimler.isEmpty ? "Resim Ekle (Max: $_maxResimSayisi)" : "+ Ekle (${_maxResimSayisi - _secilenResimler.length})",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey[600], fontSize: _secilenResimler.isEmpty ? 14 : 12, fontWeight: FontWeight.w500)
+                    ),
+                  ]),
                 ),
               ),
             ),
           ),
         if (_secilenResimler.length >= _maxResimSayisi && _secilenResimler.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 12.0, bottom: 10.0),
-            child: Text("Maksimum resim sayısına ulaştınız.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500])),
+            padding: const EdgeInsets.only(top: 10.0, bottom: 8.0),
+            child: Text("Maksimum resim sayısına ulaştınız.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
           ),
-        const SizedBox(height: 24), // Alanlar arası boşluk
+        const SizedBox(height: 20),
       ],
     );
   }
 
-  // _getLabelStyle, _buildTextFieldWrapper, _getInputDecoration, _buildOptionTile olduğu gibi kalır...
-  TextStyle _getLabelStyle() => TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w500);
+  TextStyle _getLabelStyle() => TextStyle(color: Colors.grey[300], fontSize: 13.5, fontWeight: FontWeight.w500); // Boyut ayarlandı
 
-  Widget _buildTextFieldWrapper({
-    required String label,
-    required Widget child,
-    bool isNotSavedToService = false,
-  }) {
+  Widget _buildTextFieldWrapper({required String label, required Widget child}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 18.0),
+      padding: const EdgeInsets.only(bottom: 16.0), // Boşluk ayarlandı
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(
-          children: [
-            Text(label, style: _getLabelStyle()),
-            if (isNotSavedToService)
-              Text(" (Bu bilgi kaydedilmeyecek)", style: TextStyle(color: Colors.orangeAccent.shade200, fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.normal)),
-          ],
-        ),
-        const SizedBox(height: 8.0),
+        Text(label, style: _getLabelStyle()),
+        const SizedBox(height: 7.0), // Boşluk ayarlandı
         child,
       ]),
     );
   }
 
-  InputDecoration _getInputDecoration(String hintText) {
+  InputDecoration _getInputDecoration(String hintText, {Widget? suffixIcon}) { // suffixIcon eklendi
     return InputDecoration(
       hintText: hintText,
-      hintStyle: TextStyle(color: Colors.grey[600]),
+      hintStyle: TextStyle(color: Colors.grey[650], fontSize: 15), // Renk ve boyut ayarlandı
       filled: true,
-      fillColor: Colors.grey[850],
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.redAccent.shade100, width: 1.5)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      fillColor: Colors.grey[850]?.withOpacity(0.8), // Renk ve opaklık ayarlandı
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), // Radius ayarlandı
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.redAccent[100]!.withOpacity(0.8), width: 1.2)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12), // Padding ayarlandı
+      suffixIcon: suffixIcon,
     );
   }
-
-  Widget _buildOptionTile(String title, VoidCallback? onTap) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 0),
-          decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey[800]!, width: 0.8))
-          ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(title, style: TextStyle(color: Colors.grey[200], fontSize: 16)),
-            Icon(Icons.chevron_right, color: Colors.grey[500]),
-          ]),
-        ),
-      ),
-    );
-  }
-
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context); // Temayı al
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.black, elevation: 0,
-        leading: IconButton(icon: Icon(Icons.chevron_left, color: Colors.grey[300], size: 30), onPressed: _yukleniyor ? null : () => Navigator.of(context).pop()),
-        title: Text("Pin Oluştur", style: TextStyle(color: Colors.grey[100], fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.black,
+        elevation: 0.5, // Hafif bir elevation
+        leading: IconButton(
+          icon: Icon(Icons.close_rounded, color: Colors.grey[300], size: 26), // Geri yerine kapat ikonu
+          onPressed: _yukleniyor
+              ? null
+              : () {
+            // Kullanıcı bir şeyler yazdıysa veya resim seçtiyse onay sor
+            if (_aciklamaController.text.isNotEmpty ||
+                _konumController.text.isNotEmpty ||
+                _secilenResimler.isNotEmpty ||
+                _secilenPano != null) {
+              showDialog(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    backgroundColor: Colors.grey[850],
+                    title: Text("Değişiklikler Kaydedilmeyecek", style: TextStyle(color: Colors.white, fontSize: 18)),
+                    content: Text("Bu sayfadan çıkarsanız girdiğiniz bilgiler silinecektir. Emin misiniz?", style: TextStyle(color: Colors.grey[300], fontSize: 14)),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text("İptal", style: TextStyle(color: Colors.grey[400]))),
+                      TextButton(
+                          onPressed: () {
+                            Navigator.of(dialogContext).pop(); // Diyaloğu kapat
+                            Navigator.of(context).pop();     // Sayfayı kapat
+                          },
+                          child: Text("Çık", style: TextStyle(color: Colors.redAccent[100]))),
+                    ],
+                  ));
+            } else {
+              Navigator.of(context).pop(); // Değişiklik yoksa direkt çık
+            }
+          },
+        ),
+        title: Text("Yeni Paylaşım", style: TextStyle(color: Colors.grey[100], fontWeight: FontWeight.bold, fontSize: 17)), // Başlık ayarlandı
         centerTitle: true,
       ),
       body: Stack(children: [
@@ -393,58 +368,59 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
           child: Form(
             key: _formKey,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+              padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 15.0), // Padding ayarlandı
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: <Widget>[
-                _buildImagePreviewsAndPicker(), // YENİ RESİM ALANI WIDGET'I
-
-
-
+                _buildImagePreviewsAndPicker(),
                 _buildTextFieldWrapper(
-                  label: "Açıklama",
+                  label: "Açıklama (İsteğe Bağlı)",
                   child: TextFormField(
                     controller: _aciklamaController,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    decoration: _getInputDecoration("Pin'iniz hakkında daha fazla bilgi verin..."),
-                    maxLines: 4,
+                    style: const TextStyle(color: Colors.white, fontSize: 15), // Boyut ayarlandı
+                    decoration: _getInputDecoration("Bu yer hakkında bir şeyler yaz..."),
+                    maxLines: 5, // Biraz daha fazla satır
+                    maxLength: 500, // Karakter limiti göstergesi
+                    buildCounter: (context, {required currentLength, required isFocused, maxLength}) =>
+                    (maxLength != null && currentLength > maxLength - 50) || currentLength > 0 ?
+                    Text("${currentLength}/${maxLength}", style: TextStyle(color: Colors.grey[500], fontSize: 11)) : null,
                     validator: (value) {
-                      if (value != null && value.trim().length > 500) return 'Açıklama en fazla 500 karakter olabilir.';
+                      if (value != null && value.trim().length > 500) return 'Açıklama 500 karakteri geçemez.';
                       return null;
                     },
                   ),
                 ),
-
-
-
                 _buildTextFieldWrapper(
-                  label: "Konum",
+                  label: "Konum (İsteğe Bağlı)",
                   child: TextFormField(
                     controller: _konumController,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    decoration: _getInputDecoration("Konum ekleyin (isteğe bağlı)..."),
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: _getInputDecoration("Örn: Van Gölü, Türkiye", suffixIcon: Icon(Icons.location_on_outlined, color: Colors.grey[600], size: 18,)),
                     validator: (value) => null,
                   ),
                 ),
-
                 _buildTextFieldWrapper(
-                  label: "Pano Seçimi",
+                  label: "Kategori*",
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0), // İç padding Dropdown'a bırakıldı
+                    decoration: BoxDecoration(color: Colors.grey[850]?.withOpacity(0.8), borderRadius: BorderRadius.circular(8)),
                     child: DropdownButtonFormField<String>(
                       value: _secilenPano,
-                      items: _panoSecenekleri.map((String pano) => DropdownMenuItem<String>(value: pano, child: Text(pano, style: const TextStyle(color: Colors.white, fontSize: 16)))).toList(),
+                      items: _panoSecenekleri.map((String pano) => DropdownMenuItem<String>(value: pano, child: Text(pano, style: const TextStyle(fontSize: 15)))).toList(),
                       onChanged: (String? newValue) => setState(() => _secilenPano = newValue),
-                      decoration: InputDecoration(hintText: "Pano seçin*", hintStyle: TextStyle(color: Colors.grey[600]), border: InputBorder.none),
-                      dropdownColor: Colors.grey[800], iconEnabledColor: Colors.grey[400],
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                      validator: (value) => (value == null || value.isEmpty) ? 'Lütfen bir pano seçin.' : null,
+                      decoration: InputDecoration(
+                        hintText: "Kategori seçin",
+                        hintStyle: TextStyle(color: Colors.grey[600], fontSize: 15),
+                        border: InputBorder.none, // Dış çerçeveyi kaldır
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13), // İç padding
+                      ),
+                      dropdownColor: Colors.grey[800],
+                      iconEnabledColor: Colors.grey[400],
+                      iconSize: 26, // İkon boyutu
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      validator: (value) => (value == null || value.isEmpty) ? 'Lütfen bir kategori seçin.' : null,
                     ),
                   ),
                 ),
-
-
-
-                const SizedBox(height: 80),
+                const SizedBox(height: 70), // Buton için altta boşluk
               ]),
             ),
           ),
@@ -452,16 +428,22 @@ class _GonderiEkleSayfasiState extends State<GonderiEkleSayfasi> {
         if (_yukleniyor) _buildLoadingOverlay(),
       ]),
       bottomNavigationBar: Container(
-        color: Colors.black,
-        padding: EdgeInsets.only(left: 20.0, right: 20.0, bottom: MediaQuery.of(context).padding.bottom + 16.0, top: 12.0),
+        color: Colors.black, // Arka plan rengi
+        padding: EdgeInsets.only(
+            left: 18.0, right: 18.0,
+            bottom: MediaQuery.of(context).padding.bottom + 12.0, // Alt SafeArea + ekstra boşluk
+            top: 10.0
+        ),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent, padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-              disabledBackgroundColor: Colors.redAccent.withOpacity(0.4), disabledForegroundColor: Colors.white.withOpacity(0.7)
+              backgroundColor: Colors.redAccent[200], // Renk ayarlandı
+              padding: const EdgeInsets.symmetric(vertical: 14), // Yükseklik ayarlandı
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)), // Daha yuvarlak
+              disabledBackgroundColor: Colors.redAccent[100]?.withOpacity(0.4),
+              disabledForegroundColor: Colors.white.withOpacity(0.6)
           ),
-          onPressed: (_yukleniyor || _secilenResimler.isEmpty) ? null : _gonderiOlustur, // DEĞİŞTİ: _secilenResimler
-          child: const Text("Oluştur", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+          onPressed: (_yukleniyor || _secilenResimler.isEmpty || _secilenPano == null) ? null : _gonderiOlustur, // Pano seçimi de kontrol ediliyor
+          child: const Text("Paylaş", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)), // Font ayarlandı
         ),
       ),
     );

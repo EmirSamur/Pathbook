@@ -1,32 +1,26 @@
-// hesapolustur.dart (Provider ve Modernize Edilmiş Hali)
+// lib/sayfalar/hesapolustur.dart
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // FirebaseAuthException için
-import 'package:provider/provider.dart'; // Provider importu
-import 'package:pathbooks/modeller/kullanici.dart'; // Kullanici modeli importu
-import 'package:pathbooks/servisler/yetkilendirmeservisi.dart'; // Yetkilendirme servisi importu
-import 'package:pathbooks/servisler/firestoreseervisi.dart'; // <-- FirestoreServisi importu (YOLU KONTROL ET!)
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'package:pathbooks/modeller/kullanici.dart';
+import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
+import 'package:pathbooks/servisler/firestoreseervisi.dart';
 
 class HesapOlustur extends StatefulWidget {
-  const HesapOlustur({super.key}); // super.key kullanımı
+  const HesapOlustur({super.key});
 
   @override
   State<HesapOlustur> createState() => _HesapOlusturState();
 }
 
 class _HesapOlusturState extends State<HesapOlustur> {
-  // Formun durumunu yönetmek için GlobalKey
   final _formKey = GlobalKey<FormState>();
-
-  // Form alanlarındaki değerleri tutacak değişkenler
   String _kullaniciAdi = '';
   String _email = '';
   String _sifre = '';
-
-  // İşlem sırasında yüklenme durumunu belirtmek için bool değişken
   bool _isLoading = false;
 
-  // TextFormField'ları kontrol etmek için Controller'lar (late final ile)
   late final TextEditingController _kullaniciAdiController;
   late final TextEditingController _emailController;
   late final TextEditingController _sifreController;
@@ -34,7 +28,6 @@ class _HesapOlusturState extends State<HesapOlustur> {
   @override
   void initState() {
     super.initState();
-    // Controller'ları başlat
     _kullaniciAdiController = TextEditingController();
     _emailController = TextEditingController();
     _sifreController = TextEditingController();
@@ -42,304 +35,257 @@ class _HesapOlusturState extends State<HesapOlustur> {
 
   @override
   void dispose() {
-    // Controller'ları temizle (hafıza sızıntısını önlemek için önemli)
     _kullaniciAdiController.dispose();
     _emailController.dispose();
     _sifreController.dispose();
     super.dispose();
   }
 
-  // Hata durumunda kullanıcıya Snackbar ile geri bildirim veren metot
   void _showErrorSnackbar(String message) {
-    // Widget hala ekrandaysa işlemi yap
-    if (mounted) {
-      ScaffoldMessenger.of(context).removeCurrentSnackBar(); // Önceki varsa kaldır
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Theme.of(context).colorScheme.error, // Temadan hata rengi
-          duration: const Duration(seconds: 4), // Biraz daha uzun süre göster
-        ),
-      );
-    }
-  }
-
-  // Başarı durumunda kullanıcıya Snackbar ile geri bildirim veren metot
-  void _showSuccessSnackbar(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).removeCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: Colors.green, // Başarı için yeşil
+          backgroundColor: Theme.of(context).colorScheme.error,
           duration: const Duration(seconds: 3),
         ),
       );
     }
   }
 
+  void _showSuccessSnackbar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).removeCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green[600],
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
 
-  // Formu gönderme, Auth ve Firestore işlemlerini yapma metodu
   Future<void> _trySubmit() async {
-    // 1. Formun geçerli olup olmadığını kontrol et
     final isValid = _formKey.currentState?.validate() ?? false;
-    // 2. Klavyeyi kapat
     FocusScope.of(context).unfocus();
-
-    // Form geçerli değilse veya zaten bir işlem yapılıyorsa devam etme
     if (!isValid || _isLoading) {
-      if(!isValid){
-        _showErrorSnackbar('Lütfen formdaki hataları düzeltin.');
-      }
+      if (!isValid) _showErrorSnackbar('Lütfen formdaki tüm alanları doğru doldurun.');
       return;
     }
-
-    // 3. Formdaki onSaved metotlarını çalıştırarak değerleri değişkenlere ata
     _formKey.currentState?.save();
-    print("Form kaydedildi: K.Adı: $_kullaniciAdi, Email: $_email"); // Log
-    // 4. Yüklenme durumunu başlat ve UI'ı güncelle
-    setState(() { _isLoading = true; });
-    print("Yükleme başladı..."); // Log
+    if (mounted) setState(() { _isLoading = true; });
 
-    // 5. Gerekli servisleri Provider'dan al ('read' yeterli)
-    YetkilendirmeServisi yetkilendirmeServisi;
-    FirestoreServisi firestoreServisi;
     try {
-      yetkilendirmeServisi = context.read<YetkilendirmeServisi>();
-      firestoreServisi = context.read<FirestoreServisi>();
-      print("Servisler Provider'dan alındı."); // Log
-    } catch (e) {
-      print("Provider Hatası (Servisler alınamadı): $e");
-      _showErrorSnackbar("Uygulama hatası: Servisler başlatılamadı.");
-      if (mounted) setState(() { _isLoading = false; }); // Yüklemeyi bitir
-      return; // İşleme devam etme
-    }
-
-    // 6. try-catch-finally bloğu içinde Auth ve Firestore işlemlerini yap
-    try {
-      print("Auth kaydı deneniyor..."); // Log
-      // 6a. Firebase Authentication ile kullanıcıyı kaydet
+      final yetkilendirmeServisi = context.read<YetkilendirmeServisi>();
+      final firestoreServisi = context.read<FirestoreServisi>();
       Kullanici? yeniKullanici = await yetkilendirmeServisi.kayitOl(
         kullaniciAdi: _kullaniciAdi,
         email: _email,
         password: _sifre,
       );
-      print("Auth kaydı sonucu: ${yeniKullanici?.id ?? 'null'}"); // Log
-
-      // 6b. Eğer Auth kaydı başarılıysa (kullanıcı null değilse)
       if (yeniKullanici != null) {
-        print("Firestore'a yazma deneniyor (ID: ${yeniKullanici.id})..."); // Log
-        // Firestore'a kullanıcı belgesini oluştur/yaz
-        // Bu işlem sırasında hata olursa aşağıdaki iç try-catch yakalayacak
-        try {
-          await firestoreServisi.kullaniciOlustur(
-            id: yeniKullanici.id,
-            email: _email,
-            kullaniciAdi: _kullaniciAdi, fotoUrl: '',
-            // Kullanici modelinizde başka alanlar varsa ve burada
-            // varsayılan değerler atamak isterseniz ekleyebilirsiniz.
-          );
-          print("Firestore yazma işlemi tamamlandı."); // Log
-        } catch (firestoreError, firestoreStack) {
-          // Firestore özelinde bir hata oluşursa logla ve kullanıcıya bildir.
-          // Auth işlemi başarılı olduğu için bu kritik bir durumdur.
-          print("Firestore Hatası Yakalandı (İç Try-Catch): $firestoreError");
-          print("Firestore Stack Trace:\n$firestoreStack");
-          if (mounted) {
-            _showErrorSnackbar('Hesap oluşturuldu ancak profil bilgileri kaydedilemedi.');
-          }
-          // Bu hatadan sonra işlemin nasıl devam edeceğine karar verilebilir.
-          // Şimdilik finally bloğuna gitmesine izin veriyoruz.
-          // throw firestoreError; // İsterseniz hatayı dış catch'e fırlatabilirsiniz.
-        }
-
-        // 6c. Auth ve Firestore denemesi sonrası kontrol (mounted ise)
+        await firestoreServisi.kullaniciOlustur(
+          id: yeniKullanici.id,
+          email: _email,
+          kullaniciAdi: _kullaniciAdi,
+          fotoUrl: '',
+        );
         if (mounted) {
-          print('Auth başarılı, Firestore denendi.'); // Log
-          // Başarılı kayıt mesajı gösterilebilir. Yönlendirme otomatik olacak.
-          _showSuccessSnackbar('Hesap başarıyla oluşturuldu!');
+          _showSuccessSnackbar('Hesap başarıyla oluşturuldu! Giriş yapabilirsiniz.');
+          if (Navigator.canPop(context)) {
+            await Future.delayed(const Duration(seconds: 1));
+            Navigator.of(context).pop();
+          }
         }
       } else if (mounted) {
-        // Auth kaydı başarılı oldu ama servis null döndürdü (beklenmedik)
-        print("Auth kaydı null döndü (beklenmedik)."); // Log
         _showErrorSnackbar('Kayıt işlemi tamamlandı ancak kullanıcı bilgisi alınamadı.');
       }
-
-    } on FirebaseAuthException catch (e) { // Firebase Auth hatalarını yakala
-      print("FirebaseAuthException Yakalandı (UI): ${e.code} - ${e.message}"); // Log
-      String message = 'Hesap oluşturulamadı.'; // Varsayılan mesaj
-      // Özel hata kodlarına göre mesajı ayarla
-      if (e.code == 'weak-password') {
-        message = 'Şifre çok zayıf. Lütfen daha güçlü bir şifre seçin.';
-      } else if (e.code == 'email-already-in-use') {
-        message = 'Bu e-posta adresi zaten başka bir hesap tarafından kullanılıyor.';
-      } else if (e.code == 'invalid-email') {
-        message = 'Geçersiz e-posta adresi formatı.';
-      }
+    } on FirebaseAuthException catch (e) {
+      String message = 'Hesap oluşturulamadı.';
+      if (e.code == 'weak-password') message = 'Şifre çok zayıf.';
+      else if (e.code == 'email-already-in-use') message = 'Bu e-posta zaten kayıtlı.';
+      else if (e.code == 'invalid-email') message = 'Geçersiz e-posta formatı.';
+      else message = "Bir kimlik doğrulama hatası oluştu: ${e.message}";
       _showErrorSnackbar(message);
-
-    } catch (err, stackTrace) { // Diğer tüm hataları yakala
-      print('Beklenmedik Hata Yakalandı (UI - Dış Try-Catch): $err'); // Log
-      print('Dış Hata Stack Trace:\n$stackTrace');
-      _showErrorSnackbar('Hesap oluşturulurken bir hata oluştu: ${err.toString()}');
-
+    } catch (err) {
+      _showErrorSnackbar('Beklenmedik bir hata oluştu: ${err.toString()}');
     } finally {
-      // 7. İşlem ne olursa olsun (başarılı/başarısız) yükleme durumunu bitir
-      print("Finally bloğuna girildi."); // Log
-      if (mounted) {
-        print("Widget mounted, isLoading false yapılıyor."); // Log
-        setState(() { _isLoading = false; });
-      } else {
-        print("Widget unmounted, setState çağrılmıyor."); // Log
-      }
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
-  // ----- _trySubmit METODU BİTİŞİ -----
 
+  // <<<--- InputDecoration Yardımcı Metodu Sınıf Seviyesine Taşındı ---<<<
+  InputDecoration _getInputDecoration(BuildContext context, String label, IconData prefixIcon) {
+    final theme = Theme.of(context); // Temayı burada al
+    final colorScheme = theme.colorScheme;
+
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.grey[400], fontSize: 14.5),
+      hintStyle: TextStyle(color: Colors.grey[600], fontSize: 15),
+      prefixIcon: Icon(prefixIcon, color: Colors.grey[500], size: 20),
+      filled: true,
+      fillColor: theme.inputDecorationTheme.fillColor ?? colorScheme.surface.withOpacity(0.07),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: Colors.grey[700]!, width: 0.8),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.7), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: colorScheme.error, width: 1.2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: colorScheme.error, width: 1.8),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Tema bilgilerini build metodu içinde al
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
-          "HESAP OLUŞTUR",
-          style: TextStyle(
-            fontFamily: 'Bebas',
-            fontSize: 26, // İsteğe göre artır/azalt
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
+        title: Text(
+          "Yeni Hesap Oluştur",
+          style: theme.appBarTheme.titleTextStyle?.copyWith(fontSize: 20, letterSpacing: 0.5), // Boyut ayarlandı
         ),
-        // Başlık
-        elevation: 0, // Gölgeyi kaldır
-        leading: IconButton( // Geri butonu
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            // Yüklenme sırasında geri gitmeyi engelle (isteğe bağlı)
-            if(!_isLoading) {
-              Navigator.of(context).pop();
-            }
-          },
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.appBarTheme.iconTheme?.color ?? Colors.white70),
+          onPressed: () => _isLoading ? null : Navigator.of(context).pop(),
         ),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: 0.3, // Hafif bir elevation
       ),
-      body: SafeArea( // Güvenli alan içinde
+      body: SafeArea(
         child: Form(
-          key: _formKey, // Form anahtarını ata
-          child: ListView( // Kaydırılabilir içerik
-            padding: const EdgeInsets.all(20.0), // Kenar boşlukları
-            children: <Widget>[
-              // Yüklenme göstergesi (eğer yükleniyorsa)
-              if (_isLoading)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 15.0), // Altına biraz boşluk
-                  child: LinearProgressIndicator(minHeight: 5),
-                ),
-              // const SizedBox(height: 20.0), // ProgressIndicator varsa bu gerekmeyebilir
-
-              // Kullanıcı Adı Giriş Alanı
-              TextFormField(
-                controller: _kullaniciAdiController,
-                enabled: !_isLoading, // Yüklenirken alanı pasif yap
-                autocorrect: false,
-                textInputAction: TextInputAction.next, // Sonraki alana geç
-                style: TextStyle(color: colorScheme.onSurface),
-                decoration: const InputDecoration( // Temadan alır + özel ayarlar
-                  labelText: "Kullanıcı Adı",
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                validator: (value) {
-                  final deger = value?.trim() ?? '';
-                  if (deger.isEmpty) return 'Kullanıcı adı boş bırakılamaz.';
-                  if (deger.length < 4 || deger.length > 15) return 'Kullanıcı adı 4-15 karakter olmalıdır.'; // Uzunluk güncellendi (örnek)
-                  // Kullanıcı adında özel karakter kontrolü (isteğe bağlı)
-                  // if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(deger)) return 'Sadece harf, rakam ve alt çizgi kullanın.';
-                  return null;
-                },
-                // Değeri state değişkenine kaydet
-                onSaved: (value) { _kullaniciAdi = value?.trim() ?? ''; },
-              ),
-              const SizedBox(height: 20.0), // Alanlar arası boşluk
-
-              // E-posta Giriş Alanı
-              TextFormField(
-                controller: _emailController,
-                enabled: !_isLoading,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                style: TextStyle(color: colorScheme.onSurface),
-                decoration: const InputDecoration(
-                  labelText: "E-posta",
-                  prefixIcon: Icon(Icons.mail_outline),
-                ),
-                validator: (value) {
-                  final deger = value?.trim() ?? '';
-                  if (deger.isEmpty) return 'E-posta alanı boş bırakılamaz.';
-                  // Daha basit bir e-posta kontrolü
-                  if (!deger.contains('@') || !deger.contains('.')) return 'Geçerli bir e-posta adresi giriniz.';
-                  return null;
-                },
-                onSaved: (value) { _email = value?.trim() ?? ''; },
-              ),
-              const SizedBox(height: 20.0),
-
-              // Şifre Giriş Alanı
-              TextFormField(
-                controller: _sifreController,
-                enabled: !_isLoading,
-                obscureText: true, // Şifreyi gizle
-                textInputAction: TextInputAction.done, // Klavye bitti tuşu
-                style: TextStyle(color: colorScheme.onSurface),
-                decoration: const InputDecoration(
-                  labelText: "Şifre",
-                  prefixIcon: Icon(Icons.lock_outline),
-                  // Şifre gösterme/gizleme ikonu eklenebilir
-                ),
-                validator: (value) {
-                  final deger = value ?? '';
-                  if (deger.isEmpty) return 'Şifre alanı boş bırakılamaz.';
-                  if (deger.length < 6) return 'Şifre en az 6 karakter olmalıdır.';
-                  // Daha güçlü şifre kontrolü eklenebilir (büyük harf, rakam vb.)
-                  return null;
-                },
-                onSaved: (value) { _sifre = value ?? ''; },
-                // Klavyeden bitti tuşuna basınca formu göndermeyi dene
-                onFieldSubmitted: (_) => _isLoading ? null : _trySubmit(),
-              ),
-              const SizedBox(height: 40.0), // Buton öncesi boşluk
-
-              // Hesap Oluştur Butonu
-              ElevatedButton(
-                // Yükleniyorsa veya metot null ise onPressed null olur (buton pasifleşir)
-                onPressed: _isLoading ? null : _trySubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromRGBO(139, 0, 0, 1), // Koyu kırmızı
-                  foregroundColor: Colors.white,
-                ),// Temadan stil al
-                child: _isLoading
-                    ? SizedBox( // Buton içinde dönen ikon
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary), // Buton içindeki yazı rengi
+          key: _formKey,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 15.0), // Dikey padding azaltıldı
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 35.0, top: 5.0), // Boşluk ayarlandı
+                    child: Text(
+                      'PATHBOOK',
+                      textAlign: TextAlign.center,
+                      style: textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Bebas',
+                        color: colorScheme.onBackground.withOpacity(0.9),
+                        fontSize: 50, // Boyut ayarlandı
+                        letterSpacing: 1.5,
+                      ),
+                    ),
                   ),
-                )
-                    : const Text(
-                  "Hesap oluştur",
-                  style: TextStyle(
-                    fontFamily: 'Bebas',
-                    fontSize: 20,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.bold,
+
+                  if (_isLoading)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20.0),
+                      child: LinearProgressIndicator(
+                        minHeight: 3,
+                        backgroundColor: Colors.transparent,
+                        color: colorScheme.primary.withOpacity(0.7),
+                      ),
+                    ),
+
+                  TextFormField(
+                    controller: _kullaniciAdiController,
+                    enabled: !_isLoading,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.next,
+                    style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+                    decoration: _getInputDecoration(context, "Kullanıcı Adı", Icons.person_outline_rounded), // context eklendi
+                    validator: (value) {
+                      final deger = value?.trim() ?? '';
+                      if (deger.isEmpty) return 'Kullanıcı adı boş bırakılamaz.';
+                      if (deger.length < 3) return 'Kullanıcı adı en az 3 karakter olmalıdır.';
+                      if (deger.length > 20) return 'Kullanıcı adı en fazla 20 karakter olabilir.';
+                      if (deger.contains(' ')) return 'Kullanıcı adı boşluk içeremez.';
+                      if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(deger)) return 'Sadece harf, rakam ve alt çizgi (_).';
+                      return null;
+                    },
+                    onSaved: (value) { _kullaniciAdi = value?.trim() ?? ''; },
                   ),
-                ), // Normal metin
+                  const SizedBox(height: 18.0),
+
+                  TextFormField(
+                    controller: _emailController,
+                    enabled: !_isLoading,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+                    decoration: _getInputDecoration(context, "E-posta Adresi", Icons.mail_outline_rounded), // context eklendi
+                    validator: (value) {
+                      final deger = value?.trim() ?? '';
+                      if (deger.isEmpty) return 'E-posta alanı boş bırakılamaz.';
+                      if (!RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(deger)) {
+                        return 'Geçerli bir e-posta adresi giriniz.';
+                      }
+                      return null;
+                    },
+                    onSaved: (value) { _email = value?.trim() ?? ''; },
+                  ),
+                  const SizedBox(height: 18.0),
+
+                  TextFormField(
+                    controller: _sifreController,
+                    enabled: !_isLoading,
+                    obscureText: true,
+                    textInputAction: TextInputAction.done,
+                    style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+                    decoration: _getInputDecoration(context, "Şifre", Icons.lock_outline_rounded), // context eklendi
+                    validator: (value) {
+                      final deger = value ?? '';
+                      if (deger.isEmpty) return 'Şifre alanı boş bırakılamaz.';
+                      if (deger.length < 6) return 'Şifre en az 6 karakter olmalıdır.';
+                      return null;
+                    },
+                    onSaved: (value) { _sifre = value ?? ''; },
+                    onFieldSubmitted: (_) => _isLoading ? null : _trySubmit(),
+                  ),
+                  const SizedBox(height: 30.0), // Boşluk ayarlandı
+
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _trySubmit,
+                    style: theme.elevatedButtonTheme.style?.copyWith(
+                        padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 14)), // Yükseklik ayarlandı
+                        textStyle: MaterialStateProperty.all(
+                            theme.textTheme.labelLarge?.copyWith(fontSize: 16, letterSpacing: 1.1, fontWeight: FontWeight.bold, fontFamily: 'Bebas') // Stil ayarlandı
+                        )
+                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                      height: 18, width: 18, // Boyut küçültüldü
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.0, // Kalınlık azaltıldı
+                        valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary.withOpacity(0.9)),
+                      ),
+                    )
+                        : const Text("Hesap Oluştur"),
+                  ),
+                  const SizedBox(height: 20.0),
+                ],
               ),
-              const SizedBox(height: 20.0), // En alt boşluk
-            ],
+            ),
           ),
         ),
       ),
