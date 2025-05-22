@@ -30,10 +30,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
   final List<String> _temalar = ["Doğa", "Tarih", "Kültür", "Yeme-İçme"];
 
   final Map<String, Map<String, dynamic>> _sortOptions = {
-    "Son Paylaşılanlar": {"alan": "olusturulmaZamani", "azalan": true}, // "Son Yüklenenler" daha iyi olabilir
-    "En Popülerler": {"alan": "begeniSayisi", "azalan": true},
-    // "En Çok Yorum Alanlar": {"alan": "yorumSayisi", "azalan": true}, // Yorum sayısı için index gerekebilir
-    "En Eskiler": {"alan": "olusturulmaZamani", "azalan": false},
+    "Son Yüklenenler": {"alan": "olusturulmaZamani", "azalan": true}, // "Son Yüklenenler" daha iyi olabilir
   };
   late String _selectedSortKey;
 

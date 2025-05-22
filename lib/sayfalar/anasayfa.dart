@@ -310,6 +310,7 @@ class _AnasayfaState extends State<Anasayfa> {
                   () { if(mounted && _selectedFilterInAkis != 0) setState(() => _selectedFilterInAkis = 0);},
               theme
           ),
+
           const SizedBox(width: 10),
           _buildFilterChip(
               "Takip Edilenler",

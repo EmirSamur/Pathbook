@@ -222,6 +222,74 @@ class FirestoreServisi {
       throw Exception("Beğeni işlemi güncellenirken beklenmedik bir hata oluştu.");
     }
   }
+  Future<List<Gonderi>> takipEdilenlerinGonderileriniGetir({
+    required String aktifKullaniciId,
+    int limit = 20, // Çekilecek maksimum gönderi sayısı (performans için)
+    // DocumentSnapshot? sonGorunenGonderi, // Bu basit karıştırma yönteminde sayfalama zor
+  }) async {
+    if (aktifKullaniciId.isEmpty) return [];
+
+    try {
+      // 1. Aktif kullanıcının takip ettiği kişilerin ID'lerini al
+      DocumentSnapshot<Map<String, dynamic>> kullaniciDoc =
+      await _firestore.collection(_kullanicilarKoleksiyonu).doc(aktifKullaniciId).get();
+
+      if (!kullaniciDoc.exists || kullaniciDoc.data() == null) {
+        print("FirestoreServisi: Aktif kullanıcı bulunamadı.");
+        return [];
+      }
+
+      List<String> takipEdilenIdListesi =
+      List<String>.from(kullaniciDoc.data()!['takipEdilenler'] as List? ?? []);
+
+      if (takipEdilenIdListesi.isEmpty) {
+        print("FirestoreServisi: Kullanıcı kimseyi takip etmiyor.");
+        return [];
+      }
+
+      // Firestore 'IN' sorgusu maksimum 30 ID destekler.
+      // Eğer daha fazla takip edilen varsa, listeyi parçalara bölüp birden fazla sorgu yapmak gerekir.
+      // Şimdilik ilk 30 kişiyi alıyoruz (veya daha azını).
+      // Daha robust bir çözüm için bu kısım geliştirilmeli.
+      List<String> sorgulanacakIdler = takipEdilenIdListesi.take(30).toList();
+      if (sorgulanacakIdler.isEmpty) return [];
+
+
+      print("FirestoreServisi: Takip edilen ${sorgulanacakIdler.length} kullanıcının gönderileri çekiliyor...");
+
+      // 2. Takip edilen kullanıcıların gönderilerini çek
+      // 'IN' sorgusu ile birden fazla kullanıcı ID'sine göre filtreleme
+      QuerySnapshot<Map<String, dynamic>> querySnapshot = await _firestore
+          .collection(_gonderilerKoleksiyonu)
+          .where('kullaniciId', whereIn: sorgulanacakIdler)
+      // .orderBy('olusturulmaZamani', descending: true) // Önce zamana göre sıralayıp sonra karıştırabiliriz
+          .limit(limit * sorgulanacakIdler.length) // Her kullanıcıdan ortalama 'limit' kadar çekmeye çalışalım ama toplam limiti de aşmayalım.
+      // Daha iyi bir yaklaşım, toplam bir limit belirlemek.
+      // Örneğin toplamda en son 50 gönderi gibi.
+          .get();                                  // Şimdilik basit bir limit.
+
+      List<Gonderi> gonderiler = [];
+      if (querySnapshot.docs.isNotEmpty) {
+        for (var doc in querySnapshot.docs) {
+          Kullanici? yayinlayanKullanici;
+          final String? kullaniciId = doc.data()['kullaniciId'] as String?;
+          if (kullaniciId != null && kullaniciId.isNotEmpty) {
+            // Optimize etmek için, takip edilen kullanıcıların bilgilerini
+            // bir map'te tutup tekrar tekrar çekmemek daha iyi olur.
+            // Şimdilik her biri için çekiyoruz.
+            yayinlayanKullanici = await kullaniciGetir(kullaniciId);
+          }
+          gonderiler.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
+        }
+      }
+      print("FirestoreServisi: ${gonderiler.length} adet takip edilen gönderisi çekildi.");
+      return gonderiler;
+
+    } catch (e, s) {
+      print("HATA (takipEdilenlerinGonderileriniGetir): $e \n$s");
+      return []; // Hata durumunda boş liste dön
+    }
+  }
 
   Future<void> yorumEkle({
     required String aktifKullaniciId,
