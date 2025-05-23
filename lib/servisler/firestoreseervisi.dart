@@ -1,4 +1,4 @@
-// pathbooks/servisler/firestoreseervisi.dart
+// pathbooks/servisler/firestore_servisi.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pathbooks/modeller/kullanici.dart';
 import 'package:pathbooks/modeller/gonderi.dart';
@@ -14,7 +14,6 @@ class FirestoreServisi {
   final String _yorumlarAltKoleksiyonu = "yorumlar";
   final String _onerilerKoleksiyonu = "oneriler";
 
-  // --- KULLANICI İŞLEMLERİ --- (Mevcut haliyle kalabilir)
   Future<void> kullaniciOlustur({
     required String id,
     required String email,
@@ -33,9 +32,9 @@ class FirestoreServisi {
         "takipEdilenSayisi": 0,
         "guncellenmeZamani": FieldValue.serverTimestamp(),
       });
-      print("Firestore: Kullanıcı belgesi başarıyla oluşturuldu (ID: $id)");
+      print("Firestore: Kullanıcı belgesi oluşturuldu (ID: $id)");
     } on FirebaseException catch (e) {
-      print("Firestore Hatası (kullaniciOlustur): ${e.code} - ${e.message}");
+      print("Firestore Hatası (kullaniciOlustur): Kod: ${e.code}, Mesaj: ${e.message}");
       throw Exception("Kullanıcı profili oluşturulamadı: ${e.message}");
     } catch (e) {
       print("Beklenmedik Hata (kullaniciOlustur): $e");
@@ -45,41 +44,36 @@ class FirestoreServisi {
 
   Future<Kullanici?> kullaniciGetir(String id) async {
     if (id.isEmpty) {
-      print("Firestore Hatası (kullaniciGetir): Kullanıcı ID'si boş olamaz.");
+      print("Firestore Hatası (kullaniciGetir): Kullanıcı ID'si boş.");
       return null;
     }
-    print("FirestoreServisi (kullaniciGetir): Kullanıcı $id getiriliyor...");
     try {
       DocumentSnapshot<Map<String, dynamic>> doc =
       await _firestore.collection(_kullanicilarKoleksiyonu).doc(id).get();
       if (doc.exists) {
-        print("FirestoreServisi (kullaniciGetir): Kullanıcı $id bulundu.");
         return Kullanici.dokumandanUret(doc);
       } else {
-        print("FirestoreServisi (kullaniciGetir): Kullanıcı $id bulunamadı.");
+        print("FirestoreServisi: Kullanıcı $id bulunamadı.");
         return null;
       }
     } on FirebaseException catch (e) {
-      print("Firestore Hatası (kullaniciGetir ID: $id): ${e.code} - ${e.message}");
+      print("Firestore Hatası (kullaniciGetir ID: $id): Kod: ${e.code}, Mesaj: ${e.message}");
       return null;
     } catch (e) {
       print("Beklenmedik Hata (kullaniciGetir ID: $id): $e");
       return null;
     }
   }
+
   Future<List<OneriModeli>> tumOnerileriGetir() async {
     List<OneriModeli> onerilerListesi = [];
     try {
       QuerySnapshot<Map<String, dynamic>> querySnapshot =
       await _firestore.collection(_onerilerKoleksiyonu).get();
-
       if (querySnapshot.docs.isNotEmpty) {
         onerilerListesi = querySnapshot.docs
             .map((doc) => OneriModeli.dokumandanUret(doc))
             .toList();
-        print("FirestoreServisi: ${onerilerListesi.length} adet öneri başarıyla çekildi.");
-      } else {
-        print("FirestoreServisi: 'oneriler' koleksiyonunda hiç belge bulunamadı.");
       }
     } catch (e) {
       print("FirestoreServisi - tumOnerileriGetir HATA: $e");
@@ -92,23 +86,18 @@ class FirestoreServisi {
     required Map<String, dynamic> veri,
   }) async {
     if (id.isEmpty) {
-      print("Firestore Hatası (kullaniciGuncelle): Kullanıcı ID'si boş olamaz.");
       throw ArgumentError("Kullanıcı ID'si boş olamaz.");
     }
     try {
       Map<String, dynamic> guncellenecekVeri = Map.from(veri);
       guncellenecekVeri['guncellenmeZamani'] = FieldValue.serverTimestamp();
       await _firestore.collection(_kullanicilarKoleksiyonu).doc(id).update(guncellenecekVeri);
-      print("Firestore: Kullanıcı belgesi güncellendi (ID: $id)");
     } on FirebaseException catch (e) {
-      print("Firestore Hatası (kullaniciGuncelle): ${e.code} - ${e.message}");
       throw Exception("Kullanıcı bilgileri güncellenirken bir hata oluştu: ${e.message}");
     } catch (e) {
-      print("Beklenmedik Hata (kullaniciGuncelle): $e");
       throw Exception("Kullanıcı bilgileri güncellenirken beklenmedik bir hata oluştu.");
     }
   }
-
 
   Future<void> gonderiOlustur({
     required String yayinlayanId,
@@ -116,36 +105,35 @@ class FirestoreServisi {
     required String aciklama,
     required String kategori,
     String? konum,
+    String? ulke,
+    String? sehir,
   }) async {
     if (yayinlayanId.isEmpty) throw ArgumentError("Yayınlayan ID'si boş olamaz.");
     if (gonderiResmiUrls.isEmpty) throw ArgumentError("Gönderi resmi URL listesi boş olamaz.");
     if (kategori.isEmpty) throw ArgumentError("Kategori boş olamaz.");
 
     try {
-      await _firestore.collection(_gonderilerKoleksiyonu).add({
+      Map<String, dynamic> gonderiVerisi = {
         "kullaniciId": yayinlayanId,
         "resimUrls": gonderiResmiUrls,
-        "aciklama": aciklama,
-        "konum": konum ?? "",
+        "aciklama": aciklama.trim(),
+        "konum": konum?.trim().isNotEmpty == true ? konum!.trim() : null,
         "kategori": kategori,
         "begeniSayisi": 0,
         "yorumSayisi": 0,
         "olusturulmaZamani": FieldValue.serverTimestamp(),
-      });
-      print("Firestore: Gönderi oluşturuldu (Kategori: $kategori).");
-
+      };
+      if (ulke != null && ulke.trim().isNotEmpty) gonderiVerisi['ulke'] = ulke.trim();
+      if (sehir != null && sehir.trim().isNotEmpty) gonderiVerisi['sehir'] = sehir.trim();
+      await _firestore.collection(_gonderilerKoleksiyonu).add(gonderiVerisi);
       DocumentReference kullaniciRef = _firestore.collection(_kullanicilarKoleksiyonu).doc(yayinlayanId);
       await kullaniciRef.update({
         "gonderiSayisi": FieldValue.increment(1),
         "guncellenmeZamani": FieldValue.serverTimestamp(),
       });
-      print("Firestore: Kullanıcının gönderi sayısı artırıldı.");
-
     } on FirebaseException catch (e) {
-      print("Firestore Hatası (gonderiOlustur): ${e.code} - ${e.message}");
-      throw Exception("Gönderi oluşturulurken bir hata oluştu: ${e.message}");
+      throw Exception("Gönderi oluşturulurken bir sunucu hatası oluştu: ${e.message}");
     } catch (e) {
-      print("Beklenmedik Hata (gonderiOlustur): $e");
       throw Exception("Gönderi oluşturulurken beklenmedik bir hata oluştu.");
     }
   }
@@ -159,351 +147,202 @@ class FirestoreServisi {
         .snapshots();
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> tumGonderileriGetir({DocumentSnapshot? sonGorunenGonderi, int limit = 10}) {
+  Stream<QuerySnapshot<Map<String, dynamic>>> akisGonderileriniGetir({
+    DocumentSnapshot? sonGorunenGonderi,
+    int limit = 7,
+  }) {
     Query<Map<String, dynamic>> sorgu = _firestore
         .collection(_gonderilerKoleksiyonu)
-        .orderBy('olusturulmaZamani', descending: true)
-        .limit(limit);
-
-    if (sonGorunenGonderi != null) {
-      sorgu = sorgu.startAfterDocument(sonGorunenGonderi);
-    }
+        .orderBy('olusturulmaZamani', descending: true);
+    if (sonGorunenGonderi != null) sorgu = sorgu.startAfterDocument(sonGorunenGonderi);
+    sorgu = sorgu.limit(limit);
     return sorgu.snapshots();
   }
 
-  Future<bool> kullaniciGonderiyiBegendiMi({
-    required String gonderiId,
-    required String aktifKullaniciId,
+  Future<Map<String, dynamic>> gonderileriGetirFiltreleSirala({
+    String? aramaMetni,
+    String? kategori,
+    String? ulke,
+    String? sehir,
+    String siralamaAlani = 'olusturulmaZamani',
+    bool azalan = true,
+    int limitSayisi = 7,
+    DocumentSnapshot? sonGorunenDoc,
   }) async {
-    if (gonderiId.isEmpty || aktifKullaniciId.isEmpty) return false;
+    print("FirestoreServisi: gonderileriGetirFiltreleSirala -> Kategori: $kategori, Ülke: $ulke, Şehir: $sehir, Arama: '$aramaMetni', Sıralama: $siralamaAlani ($azalan)");
     try {
-      DocumentSnapshot begeniDoc = await _firestore
-          .collection(_gonderilerKoleksiyonu)
-          .doc(gonderiId)
-          .collection(_begenilerAltKoleksiyonu)
-          .doc(aktifKullaniciId)
-          .get();
-      return begeniDoc.exists;
-    } catch (e) {
-      print("Firestore Hatası (kullaniciGonderiyiBegendiMi): $e");
-      return false;
-    }
-  }
+      Query<Map<String, dynamic>> sorgu = _firestore.collection(_gonderilerKoleksiyonu);
 
-  Future<void> gonderiBegenToggle({
-    required String gonderiId,
-    required String aktifKullaniciId,
-  }) async {
-    if (gonderiId.isEmpty || aktifKullaniciId.isEmpty) {
-      throw ArgumentError("Gönderi ID'si veya Aktif Kullanıcı ID'si boş olamaz.");
-    }
-    try {
-      WriteBatch batch = _firestore.batch();
-      DocumentReference gonderiRef = _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId);
-      DocumentReference begeniRef = gonderiRef.collection(_begenilerAltKoleksiyonu).doc(aktifKullaniciId);
-
-      DocumentSnapshot begeniDocSnapshot = await begeniRef.get();
-
-      if (begeniDocSnapshot.exists) {
-        batch.update(gonderiRef, {"begeniSayisi": FieldValue.increment(-1)});
-        batch.delete(begeniRef);
-        print("Firestore: Beğeni geri alındı. Gönderi: $gonderiId, Kullanıcı: $aktifKullaniciId");
-      } else {
-        batch.update(gonderiRef, {"begeniSayisi": FieldValue.increment(1)});
-        batch.set(begeniRef, {"begeniZamani": FieldValue.serverTimestamp()});
-        print("Firestore: Gönderi beğenildi. Gönderi: $gonderiId, Kullanıcı: $aktifKullaniciId");
+      if (kategori != null && kategori.isNotEmpty && kategori.toLowerCase() != "tümü") {
+        sorgu = sorgu.where('kategori', isEqualTo: kategori);
       }
-      await batch.commit();
-    } on FirebaseException catch (e) {
-      print("Firestore Hatası (gonderiBegenToggle): ${e.code} - ${e.message}");
-      throw Exception("Beğeni işlemi güncellenirken bir hata oluştu: ${e.message}");
-    } catch (e) {
-      print("Beklenmedik Hata (gonderiBegenToggle): $e");
-      throw Exception("Beğeni işlemi güncellenirken beklenmedik bir hata oluştu.");
-    }
-  }
-  Future<List<Gonderi>> takipEdilenlerinGonderileriniGetir({
-    required String aktifKullaniciId,
-    int limit = 20, // Çekilecek maksimum gönderi sayısı (performans için)
-    // DocumentSnapshot? sonGorunenGonderi, // Bu basit karıştırma yönteminde sayfalama zor
-  }) async {
-    if (aktifKullaniciId.isEmpty) return [];
-
-    try {
-      // 1. Aktif kullanıcının takip ettiği kişilerin ID'lerini al
-      DocumentSnapshot<Map<String, dynamic>> kullaniciDoc =
-      await _firestore.collection(_kullanicilarKoleksiyonu).doc(aktifKullaniciId).get();
-
-      if (!kullaniciDoc.exists || kullaniciDoc.data() == null) {
-        print("FirestoreServisi: Aktif kullanıcı bulunamadı.");
-        return [];
+      if (ulke != null && ulke.isNotEmpty && ulke.toLowerCase() != "tümü") {
+        sorgu = sorgu.where('ulke', isEqualTo: ulke);
+      }
+      if (sehir != null && sehir.isNotEmpty && sehir.toLowerCase() != "tümü") {
+        sorgu = sorgu.where('sehir', isEqualTo: sehir);
       }
 
-      List<String> takipEdilenIdListesi =
-      List<String>.from(kullaniciDoc.data()!['takipEdilenler'] as List? ?? []);
+      sorgu = sorgu.orderBy(siralamaAlani, descending: azalan);
+      if (sonGorunenDoc != null) sorgu = sorgu.startAfterDocument(sonGorunenDoc);
+      sorgu = sorgu.limit(limitSayisi);
 
-      if (takipEdilenIdListesi.isEmpty) {
-        print("FirestoreServisi: Kullanıcı kimseyi takip etmiyor.");
-        return [];
-      }
+      QuerySnapshot<Map<String, dynamic>> snapshot = await sorgu.get();
+      List<Gonderi> gonderilerListesi = [];
+      DocumentSnapshot? enSonCekilenDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
 
-      // Firestore 'IN' sorgusu maksimum 30 ID destekler.
-      // Eğer daha fazla takip edilen varsa, listeyi parçalara bölüp birden fazla sorgu yapmak gerekir.
-      // Şimdilik ilk 30 kişiyi alıyoruz (veya daha azını).
-      // Daha robust bir çözüm için bu kısım geliştirilmeli.
-      List<String> sorgulanacakIdler = takipEdilenIdListesi.take(30).toList();
-      if (sorgulanacakIdler.isEmpty) return [];
-
-
-      print("FirestoreServisi: Takip edilen ${sorgulanacakIdler.length} kullanıcının gönderileri çekiliyor...");
-
-      // 2. Takip edilen kullanıcıların gönderilerini çek
-      // 'IN' sorgusu ile birden fazla kullanıcı ID'sine göre filtreleme
-      QuerySnapshot<Map<String, dynamic>> querySnapshot = await _firestore
-          .collection(_gonderilerKoleksiyonu)
-          .where('kullaniciId', whereIn: sorgulanacakIdler)
-      // .orderBy('olusturulmaZamani', descending: true) // Önce zamana göre sıralayıp sonra karıştırabiliriz
-          .limit(limit * sorgulanacakIdler.length) // Her kullanıcıdan ortalama 'limit' kadar çekmeye çalışalım ama toplam limiti de aşmayalım.
-      // Daha iyi bir yaklaşım, toplam bir limit belirlemek.
-      // Örneğin toplamda en son 50 gönderi gibi.
-          .get();                                  // Şimdilik basit bir limit.
-
-      List<Gonderi> gonderiler = [];
-      if (querySnapshot.docs.isNotEmpty) {
-        for (var doc in querySnapshot.docs) {
-          Kullanici? yayinlayanKullanici;
-          final String? kullaniciId = doc.data()['kullaniciId'] as String?;
-          if (kullaniciId != null && kullaniciId.isNotEmpty) {
-            // Optimize etmek için, takip edilen kullanıcıların bilgilerini
-            // bir map'te tutup tekrar tekrar çekmemek daha iyi olur.
-            // Şimdilik her biri için çekiyoruz.
-            yayinlayanKullanici = await kullaniciGetir(kullaniciId);
-          }
-          gonderiler.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
-        }
-      }
-      print("FirestoreServisi: ${gonderiler.length} adet takip edilen gönderisi çekildi.");
-      return gonderiler;
-
-    } catch (e, s) {
-      print("HATA (takipEdilenlerinGonderileriniGetir): $e \n$s");
-      return []; // Hata durumunda boş liste dön
-    }
-  }
-
-  Future<void> yorumEkle({
-    required String aktifKullaniciId,
-    required String gonderiId,
-    required String yorumMetni,
-  }) async {
-    if (aktifKullaniciId.isEmpty || gonderiId.isEmpty || yorumMetni.trim().isEmpty) {
-      throw ArgumentError("Kullanıcı ID, Gönderi ID veya Yorum metni boş olamaz.");
-    }
-    try {
-      DocumentReference yorumRef = _firestore
-          .collection(_gonderilerKoleksiyonu)
-          .doc(gonderiId)
-          .collection(_yorumlarAltKoleksiyonu)
-          .doc();
-
-      await yorumRef.set({
-        "yorumMetni": yorumMetni.trim(),
-        "kullaniciId": aktifKullaniciId,
-        "olusturulmaZamani": FieldValue.serverTimestamp(),
-      });
-
-      DocumentReference gonderiRef = _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId);
-      await gonderiRef.update({"yorumSayisi": FieldValue.increment(1)});
-      print("Firestore: Yorum başarıyla eklendi. Gönderi: $gonderiId");
-    } on FirebaseException catch (e) {
-      print("Firestore Hatası (yorumEkle): ${e.code} - ${e.message}");
-      throw Exception("Yorum eklenirken bir hata oluştu: ${e.message}");
-    } catch (e) {
-      print("Beklenmedik Hata (yorumEkle): $e");
-      throw Exception("Yorum eklenirken beklenmedik bir hata oluştu.");
-    }
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> yorumlariGetir(String gonderiId) {
-    if (gonderiId.isEmpty) return Stream.empty();
-    return _firestore
-        .collection(_gonderilerKoleksiyonu)
-        .doc(gonderiId)
-        .collection(_yorumlarAltKoleksiyonu)
-        .orderBy('olusturulmaZamani', descending: false)
-        .snapshots()
-        .handleError((error) {
-      print("Firestore Stream Hatası (yorumlariGetir): $error");
-      return Stream.empty();
-    });
-  }
-
-  Stream<List<DosyaModeli>> tumDosyalariGetir({DocumentSnapshot? sonGorunenDosya, int limit = 12}) {
-    Query<Map<String, dynamic>> sorgu = _firestore
-        .collection(_dosyalarKoleksiyonu)
-        .orderBy('sonGuncelleme', descending: true);
-
-    if (sonGorunenDosya != null) {
-      sorgu = sorgu.startAfterDocument(sonGorunenDosya);
-    }
-    sorgu = sorgu.limit(limit);
-
-    return sorgu.snapshots().map((snapshot) {
-      if (snapshot.docs.isEmpty) {
-        return <DosyaModeli>[];
-      }
-      return snapshot.docs.map((doc) => DosyaModeli.fromFirestore(doc)).toList();
-    }).handleError((error) {
-      print("Firestore Stream Hatası (tumDosyalariGetir): $error");
-      return <DosyaModeli>[];
-    });
-  }
-
-  Stream<List<Gonderi>> dosyadanGonderileriGetir(String dosyaId, {DocumentSnapshot? sonGorunenGonderi, int limit = 15}) {
-    if (dosyaId.isEmpty) return Stream.value([]);
-    Query<Map<String, dynamic>> sorgu = _firestore
-        .collection(_gonderilerKoleksiyonu)
-        .where('aitOlduguDosyaId', isEqualTo: dosyaId) // Bu alanın Gonderi modelinde ve Firestore'da olduğundan emin olun
-        .orderBy('olusturulmaZamani', descending: true)
-        .limit(limit);
-
-    if (sonGorunenGonderi != null) {
-      sorgu = sorgu.startAfterDocument(sonGorunenGonderi);
-    }
-
-    return sorgu.snapshots().asyncMap((snapshot) async {
-      if (snapshot.docs.isEmpty) return <Gonderi>[];
-      List<Gonderi> gonderiler = [];
       for (var doc in snapshot.docs) {
         Kullanici? yayinlayanKullanici;
         final String? kullaniciId = doc.data()['kullaniciId'] as String?;
         if (kullaniciId != null && kullaniciId.isNotEmpty) {
           yayinlayanKullanici = await kullaniciGetir(kullaniciId);
         }
-        gonderiler.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
+        Gonderi gonderi = Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici);
+
+        if (aramaMetni != null && aramaMetni.trim().isNotEmpty) {
+          final String aramaLower = aramaMetni.trim().toLowerCase();
+          bool eslesme = (gonderi.aciklama.toLowerCase().contains(aramaLower)) ||
+              (gonderi.kategori.toLowerCase().contains(aramaLower)) ||
+              (gonderi.konum?.toLowerCase().contains(aramaLower) ?? false) ||
+              (gonderi.ulke?.toLowerCase().contains(aramaLower) ?? false) ||
+              (gonderi.sehir?.toLowerCase().contains(aramaLower) ?? false) ||
+              (gonderi.yayinlayanKullanici?.kullaniciAdi?.toLowerCase().contains(aramaLower) ?? false);
+          if (eslesme) gonderilerListesi.add(gonderi);
+        } else {
+          gonderilerListesi.add(gonderi);
+        }
       }
-      return gonderiler;
-    }).handleError((error){
-      print("Firestore Stream Hatası (dosyadanGonderileriGetir): $error");
-      return <Gonderi>[];
-    });
-  }
-  Future<void> gonderiSil({required String gonderiId, required String kullaniciId}) async {
-    if (gonderiId.isEmpty || kullaniciId.isEmpty) {
-      throw ArgumentError("Gönderi ID'si veya Kullanıcı ID'si boş olamaz.");
+      return {'gonderiler': gonderilerListesi, 'sonDoc': enSonCekilenDoc};
+    } on FirebaseException catch (e, s) {
+      print("FIRESTORE HATA (gonderileriGetirFiltreleSirala): ${e.code} - ${e.message}");
+      if (e.code == 'failed-precondition') {
+        print("EKSİK INDEX UYARISI! Lütfen Firebase konsolunda belirtilen linke giderek index oluşturun. Mesaj: ${e.message}");
+      }
+      print("Stack Trace: \n$s");
+      throw Exception("Gönderiler filtrelenirken bir sunucu hatası oluştu: ${e.message}");
+    } catch (e, s) {
+      print("BEKLENMEDİK HATA (gonderileriGetirFiltreleSirala): $e\nStack Trace: \n$s");
+      throw Exception("Gönderiler filtrelenirken beklenmedik bir hata oluştu: $e");
     }
+  }
+
+  Future<void> gonderiSil({required String gonderiId, required String kullaniciId}) async {
+    if (gonderiId.isEmpty || kullaniciId.isEmpty) throw ArgumentError("Gönderi ID veya Kullanıcı ID boş olamaz.");
     try {
-      // 1. Gönderi belgesini sil
       await _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId).delete();
-      print("Firestore: Gönderi silindi (ID: $gonderiId)");
-
-      // 2. Kullanıcının gönderi sayısını güncelle (azalt)
       DocumentReference kullaniciRef = _firestore.collection(_kullanicilarKoleksiyonu).doc(kullaniciId);
-      await kullaniciRef.update({
-        "gonderiSayisi": FieldValue.increment(-1),
-        "guncellenmeZamani": FieldValue.serverTimestamp(), // Güncellenme zamanını da set et
-      });
-      print("Firestore: Kullanıcının (ID: $kullaniciId) gönderi sayısı azaltıldı.");
-
-      // TODO (İleri Seviye): Bu gönderiye ait resimleri Firebase Storage'dan sil.
-      // Bu genellikle Firebase Functions ile asenkron olarak yapılır.
-      // Gonderi belgesinde resimlerin Storage path'lerini tutuyorsanız,
-      // bir Cloud Function tetikleyerek bu path'lerdeki dosyaları silebilirsiniz.
-
+      await kullaniciRef.update({"gonderiSayisi": FieldValue.increment(-1), "guncellenmeZamani": FieldValue.serverTimestamp()});
     } on FirebaseException catch (e) {
-      print("Firestore Hatası (gonderiSil): ${e.code} - ${e.message}");
       throw Exception("Gönderi silinirken bir sunucu hatası oluştu: ${e.message}");
     } catch (e) {
-      print("Beklenmedik Hata (gonderiSil): $e");
       throw Exception("Gönderi silinirken beklenmedik bir hata oluştu.");
     }
   }
 
-
-  // YENİ GÜNCELLENMİŞ METOD: Gönderileri temaya ve sıralamaya göre getirme
-  // Hem gönderi listesini hem de son dokümanı döndürecek.
-  Future<Map<String, dynamic>> gonderileriGetirFiltreleSirala({
-    required String tema,
-    String siralamaAlani = 'olusturulmaZamani',
-    bool azalan = true,
-    int limitSayisi = 10, // ara.dart ile uyumlu olması için 10 yapıldı
-    DocumentSnapshot? sonGorunenDoc,
-  }) async {
-    print("FirestoreServisi: gonderileriGetirFiltreleSirala çağrıldı. Tema: $tema, Sıralama: $siralamaAlani ($azalan), Limit: $limitSayisi, SonDoc: ${sonGorunenDoc?.id}");
+  Future<bool> kullaniciGonderiyiBegendiMi({required String gonderiId, required String aktifKullaniciId}) async {
+    if (gonderiId.isEmpty || aktifKullaniciId.isEmpty) return false;
     try {
-      if (tema.isEmpty) {
-        print("FirestoreServisi: Tema boş, boş sonuç döndürülüyor.");
-        return {'gonderiler': <Gonderi>[], 'sonDoc': null};
-      }
+      DocumentSnapshot begeniDoc = await _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId).collection(_begenilerAltKoleksiyonu).doc(aktifKullaniciId).get();
+      return begeniDoc.exists;
+    } catch (e) {
+      return false;
+    }
+  }
 
-      Query<Map<String, dynamic>> sorgu = _firestore
-          .collection(_gonderilerKoleksiyonu)
-          .where('kategori', isEqualTo: tema);
-      print("FirestoreServisi: `.where('kategori', isEqualTo: '$tema')` uygulandı.");
-
-      sorgu = sorgu.orderBy(siralamaAlani, descending: azalan);
-      print("FirestoreServisi: `.orderBy('$siralamaAlani', descending: $azalan)` uygulandı.");
-
-      if (sonGorunenDoc != null) {
-        sorgu = sorgu.startAfterDocument(sonGorunenDoc);
-        print("FirestoreServisi: `.startAfterDocument(${sonGorunenDoc.id})` uygulandı.");
-      }
-
-      // Limiti startAfterDocument'tan SONRA uygulamak daha doğru, özellikle count ile birleştirildiğinde.
-      // Ancak burada ayrı bir count sorgusu yok, direkt limitli get yapıyoruz.
-      sorgu = sorgu.limit(limitSayisi);
-      print("FirestoreServisi: `.limit($limitSayisi)` uygulandı.");
-
-
-      print("FirestoreServisi: Sorgu Firestore'a gönderiliyor...");
-      QuerySnapshot<Map<String, dynamic>> snapshot = await sorgu.get();
-      print("FirestoreServisi: Sorgu sonucu alındı. ${snapshot.docs.length} doküman bulundu.");
-
-      List<Gonderi> gonderilerListesi = [];
-      DocumentSnapshot? enSonCekilenDoc;
-
-      if (snapshot.docs.isNotEmpty) {
-        enSonCekilenDoc = snapshot.docs.last; // Bir sonraki sayfalama için son dokümanı sakla
-        for (var i = 0; i < snapshot.docs.length; i++) {
-          var doc = snapshot.docs[i];
-          print("FirestoreServisi: Doküman ${doc.id} işleniyor (${i+1}/${snapshot.docs.length})...");
-          final data = doc.data();
-          Kullanici? yayinlayanKullanici;
-          final String? kullaniciId = data['kullaniciId'] as String?; // Gonderi modeline göre kontrol et
-          if (kullaniciId != null && kullaniciId.isNotEmpty) {
-            print("FirestoreServisi: Kullanıcı getiriliyor (ID: $kullaniciId)...");
-            yayinlayanKullanici = await kullaniciGetir(kullaniciId);
-            print("FirestoreServisi: Kullanıcı ${yayinlayanKullanici?.kullaniciAdi ?? 'bulunamadı'} (ID: $kullaniciId) getirildi.");
-          } else {
-            print("FirestoreServisi: Doküman ${doc.id} için kullaniciId bulunamadı veya boş.");
-          }
-          print("FirestoreServisi: Gonderi.dokumandanUret çağrılacak. Doküman ID: ${doc.id}, Veri: $data");
-          gonderilerListesi.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
-          print("FirestoreServisi: Doküman ${doc.id} Gonderi nesnesine dönüştürüldü.");
-        }
+  Future<void> gonderiBegenToggle({required String gonderiId, required String aktifKullaniciId}) async {
+    if (gonderiId.isEmpty || aktifKullaniciId.isEmpty) throw ArgumentError("Gönderi ID veya Aktif Kullanıcı ID boş olamaz.");
+    try {
+      WriteBatch batch = _firestore.batch();
+      DocumentReference gonderiRef = _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId);
+      DocumentReference begeniRef = gonderiRef.collection(_begenilerAltKoleksiyonu).doc(aktifKullaniciId);
+      DocumentSnapshot begeniDocSnapshot = await begeniRef.get();
+      if (begeniDocSnapshot.exists) {
+        batch.update(gonderiRef, {"begeniSayisi": FieldValue.increment(-1)});
+        batch.delete(begeniRef);
       } else {
-        print("FirestoreServisi: '$tema' temasında ($siralamaAlani) bu sayfada gönderi bulunamadı (snapshot boş).");
+        batch.update(gonderiRef, {"begeniSayisi": FieldValue.increment(1)});
+        batch.set(begeniRef, {"begeniZamani": FieldValue.serverTimestamp()});
       }
+      await batch.commit();
+    } on FirebaseException catch (e) {
+      throw Exception("Beğeni işlemi güncellenirken bir hata oluştu: ${e.message}");
+    } catch (e) {
+      throw Exception("Beğeni işlemi güncellenirken beklenmedik bir hata oluştu.");
+    }
+  }
 
-      print("FirestoreServisi: '$tema' temasında ${gonderilerListesi.length} gönderi başarıyla işlendi. Son doküman ID: ${enSonCekilenDoc?.id}");
-      return {'gonderiler': gonderilerListesi, 'sonDoc': enSonCekilenDoc};
+  Future<void> yorumEkle({required String aktifKullaniciId, required String gonderiId, required String yorumMetni}) async {
+    if (aktifKullaniciId.isEmpty || gonderiId.isEmpty || yorumMetni.trim().isEmpty) throw ArgumentError("Gerekli alanlar boş olamaz.");
+    try {
+      await _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId).collection(_yorumlarAltKoleksiyonu).add({"yorumMetni": yorumMetni.trim(), "kullaniciId": aktifKullaniciId, "olusturulmaZamani": FieldValue.serverTimestamp()});
+      await _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId).update({"yorumSayisi": FieldValue.increment(1)});
+    } on FirebaseException catch (e) {
+      throw Exception("Yorum eklenirken bir hata oluştu: ${e.message}");
+    } catch (e) {
+      throw Exception("Yorum eklenirken beklenmedik bir hata oluştu.");
+    }
+  }
 
-    } on FirebaseException catch (e, s) {
-      print("====== FIRESTORE SERVİSİ - FIREBASE HATASI (gonderileriGetirFiltreleSirala) ======");
-      print("TEMA: $tema, SIRALAMA: $siralamaAlani");
-      print("HATA KODU: ${e.code}");
-      print("HATA MESAJI: ${e.message}");
-      print("STACK TRACE (FirebaseException): \n$s");
-      print("================================================");
-      throw Exception("Gönderiler getirilirken bir sunucu hatası oluştu: ${e.message}");
+  Stream<QuerySnapshot<Map<String, dynamic>>> yorumlariGetir(String gonderiId) {
+    if (gonderiId.isEmpty) return Stream.empty();
+    return _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId).collection(_yorumlarAltKoleksiyonu).orderBy('olusturulmaZamani', descending: false).snapshots().handleError((error, stackTrace) {
+      print("Firestore Stream Hatası (yorumlariGetir): $error \n$stackTrace");
+      return Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
+    });
+  }
+
+  Stream<List<DosyaModeli>> tumDosyalariGetir({DocumentSnapshot? sonGorunenDosya, int limit = 12}) {
+    Query<Map<String, dynamic>> sorgu = _firestore.collection(_dosyalarKoleksiyonu).orderBy('sonGuncelleme', descending: true);
+    if (sonGorunenDosya != null) sorgu = sorgu.startAfterDocument(sonGorunenDosya);
+    sorgu = sorgu.limit(limit);
+    return sorgu.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => DosyaModeli.fromFirestore(doc)).toList();
+    }).handleError((error, stackTrace) {
+      print("Firestore Stream Hatası (tumDosyalariGetir): $error \n$stackTrace");
+      return Stream<List<DosyaModeli>>.value(<DosyaModeli>[]);
+    });
+  }
+
+  Stream<List<Gonderi>> dosyadanGonderileriGetir(String dosyaId, {DocumentSnapshot? sonGorunenGonderi, int limit = 15}) {
+    if (dosyaId.isEmpty) return Stream.value(<Gonderi>[]);
+    Query<Map<String, dynamic>> sorgu = _firestore.collection(_gonderilerKoleksiyonu).where('aitOlduguDosyaId', isEqualTo: dosyaId).orderBy('olusturulmaZamani', descending: true).limit(limit);
+    if (sonGorunenGonderi != null) sorgu = sorgu.startAfterDocument(sonGorunenGonderi);
+    return sorgu.snapshots().asyncMap((snapshot) async {
+      List<Gonderi> gonderiler = [];
+      for (var doc in snapshot.docs) {
+        Kullanici? yayinlayanKullanici;
+        final String? kullaniciId = doc.data()['kullaniciId'] as String?;
+        if (kullaniciId != null && kullaniciId.isNotEmpty) yayinlayanKullanici = await kullaniciGetir(kullaniciId);
+        gonderiler.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
+      }
+      return gonderiler;
+    }).handleError((error, stackTrace){
+      print("Firestore Stream Hatası (dosyadanGonderileriGetir): $error \n$stackTrace");
+      return Stream<List<Gonderi>>.value(<Gonderi>[]);
+    });
+  }
+
+  Future<List<Gonderi>> takipEdilenlerinGonderileriniGetir({required String aktifKullaniciId, int limit = 20}) async {
+    if (aktifKullaniciId.isEmpty) return [];
+    try {
+      DocumentSnapshot<Map<String, dynamic>> kullaniciDoc = await _firestore.collection(_kullanicilarKoleksiyonu).doc(aktifKullaniciId).get();
+      if (!kullaniciDoc.exists || kullaniciDoc.data() == null) return [];
+      List<String> takipEdilenIdListesi = List<String>.from(kullaniciDoc.data()!['takipEdilenler'] as List? ?? []);
+      if (takipEdilenIdListesi.isEmpty) return [];
+      List<String> sorgulanacakIdler = takipEdilenIdListesi.take(30).toList();
+      if (sorgulanacakIdler.isEmpty) return [];
+      QuerySnapshot<Map<String, dynamic>> querySnapshot = await _firestore.collection(_gonderilerKoleksiyonu).where('kullaniciId', whereIn: sorgulanacakIdler).orderBy('olusturulmaZamani', descending: true).limit(limit).get();
+      List<Gonderi> gonderiler = [];
+      for (var doc in querySnapshot.docs) {
+        Kullanici? yayinlayanKullanici;
+        final String? kullaniciId = doc.data()['kullaniciId'] as String?;
+        if (kullaniciId != null && kullaniciId.isNotEmpty) yayinlayanKullanici = await kullaniciGetir(kullaniciId);
+        gonderiler.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
+      }
+      return gonderiler;
     } catch (e, s) {
-      print("====== FIRESTORE SERVİSİ - BEKLENMEDİK HATA (gonderileriGetirFiltreleSirala) ======");
-      print("TEMA: $tema, SIRALAMA: $siralamaAlani");
-      print("HATA TİPİ: ${e.runtimeType}");
-      print("HATA MESAJI: $e");
-      print("STACK TRACE (Beklenmedik): \n$s");
-      print("================================================");
-      throw Exception("Gönderiler getirilirken beklenmedik bir hata oluştu: $e");
+      print("HATA (takipEdilenlerinGonderileriniGetir): $e \n$s");
+      return [];
     }
   }
 }
