@@ -65,7 +65,7 @@ class _AnasayfaState extends State<Anasayfa> {
               _gosterilecekOneri = _onerilerListesi[randomIndex];
               _sonGosterilenDuyuruKutusuOnerisi = _gosterilecekOneri;
             });
-            _duyuruTimer = Timer(const Duration(seconds: 7), () {
+            _duyuruTimer = Timer(const Duration(seconds: 5), () {
               if (mounted) {
                 setState(() {
                   _gosterilecekOneri = null;
