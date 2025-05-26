@@ -1,26 +1,27 @@
 // lib/widgets/content_card.dart
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:pathbooks/modeller/kullanici.dart';
 import 'package:provider/provider.dart';
 import 'package:pathbooks/servisler/firestoreseervisi.dart';
-import 'package:share_plus/share_plus.dart'; // <<<--- YENİ IMPORT
+import 'package:share_plus/share_plus.dart';
 
 class ContentCard extends StatefulWidget {
   final String gonderiId;
   final List<String> resimUrls;
   final String profileUrl;
   final String userName;
-  final String location;
+  final String? location;     // Genel konum etiketi (opsiyonel, örn: "Eiffel Kulesi")
+  final String? ulke;         // YENİ: Ülke adı (opsiyonel, örn: "Fransa")
+  final String? sehir;        // YENİ: Şehir adı (opsiyonel, örn: "Paris")
   final String? description;
-  final String? category;
+  final String? category;     // Kategori adı
   final int initialLikeCount;
   final int initialCommentCount;
   final String aktifKullaniciId;
+  final Kullanici? yayinlayanKullanici;
 
   final VoidCallback? onProfileTap;
-  // final VoidCallback? onShareTap; // <<<--- BU PARAMETRE KALDIRILDI (veya opsiyonel bırakılabilir)
   final VoidCallback? onMoreTap;
   final Function(String gonderiId)? onCommentTap;
   final VoidCallback? onDetailsTap;
@@ -31,17 +32,19 @@ class ContentCard extends StatefulWidget {
     required this.resimUrls,
     required this.profileUrl,
     required this.userName,
-    required this.location,
+    this.location,
+    this.ulke,    // YENİ
+    this.sehir,   // YENİ
     this.description,
     this.category,
     required this.initialLikeCount,
     required this.initialCommentCount,
     required this.aktifKullaniciId,
+    this.yayinlayanKullanici,
     this.onProfileTap,
-    // this.onShareTap, // Kaldırıldı
     this.onMoreTap,
     this.onCommentTap,
-    this.onDetailsTap, Kullanici? yayinlayanKullanici,
+    this.onDetailsTap,
   }) : super(key: key);
 
   @override
@@ -59,14 +62,15 @@ class _ContentCardState extends State<ContentCard> {
   bool _isBookmarking = false;
   bool _showFullDescription = false;
 
-  static const double _avatarRadius = 18.0;
+  // Stil sabitleri
+  static const double _avatarRadius = 19.0; // Biraz artırıldı
   static const double _headerFontSize = 14.0;
-  static const double _actionIconSize = 23.0;
-  static const double _likeCountFontSize = 13.0;
+  static const double _actionIconSize = 22.5;
+  static const double _likeCommentFontSize = 13.0;
   static const double _descriptionFontSize = 13.5;
   static const double _metaIconSize = 13.5;
-  static const double _metaFontSize = 11.0;
-  static final Color _highlightColor = Colors.redAccent[200]!;
+  static const double _metaFontSize = 11.5;
+  static final Color _metaHighlightColor = Colors.blueGrey[300]!;
 
   @override
   void initState() {
@@ -116,15 +120,20 @@ class _ContentCardState extends State<ContentCard> {
   }
 
   Future<void> _checkIfLiked() async {
-    if (widget.gonderiId.isEmpty || widget.aktifKullaniciId.isEmpty || !mounted) {
+    if (!mounted || widget.gonderiId.isEmpty || widget.aktifKullaniciId.isEmpty) {
       if (mounted) setState(() => _isLiked = false);
       return;
     }
-    bool liked = await _firestoreServisi.kullaniciGonderiyiBegendiMi(
-      gonderiId: widget.gonderiId,
-      aktifKullaniciId: widget.aktifKullaniciId,
-    );
-    if (mounted) setState(() => _isLiked = liked);
+    try {
+      bool liked = await _firestoreServisi.kullaniciGonderiyiBegendiMi(
+        gonderiId: widget.gonderiId,
+        aktifKullaniciId: widget.aktifKullaniciId,
+      );
+      if (mounted) setState(() => _isLiked = liked);
+    } catch (e) {
+      print("ContentCard - _checkIfLiked Hata: $e");
+      if (mounted) setState(() => _isLiked = false);
+    }
   }
 
   Future<void> _toggleLike() async {
@@ -146,14 +155,18 @@ class _ContentCardState extends State<ContentCard> {
   }
 
   Future<void> _checkIfBookmarked() async {
-    // TODO: Firestore'dan kaydetme durumunu çek
-    if (widget.gonderiId.isEmpty || widget.aktifKullaniciId.isEmpty || !mounted) {
+    if (!mounted || widget.gonderiId.isEmpty || widget.aktifKullaniciId.isEmpty) {
       if (mounted) setState(() => _isBookmarked = false);
       return;
     }
-    // Örnek: bool bookmarked = await _firestoreServisi.isGonderiBookmarked(widget.gonderiId, widget.aktifKullaniciId);
-    // if(mounted) setState(() => _isBookmarked = bookmarked);
-    if (mounted) setState(() => _isBookmarked = false); // Şimdilik false
+    // TODO: Firestore'dan veya yerel depodan kullanıcının bu gönderiyi kaydedip kaydetmediğini çek.
+    // Örnek:
+    // bool bookmarked = await _firestoreServisi.isGonderiBookmarked(
+    //   gonderiId: widget.gonderiId,
+    //   kullaniciId: widget.aktifKullaniciId,
+    // );
+    // if (mounted) setState(() => _isBookmarked = bookmarked);
+    if (mounted) setState(() => _isBookmarked = false); // Şimdilik varsayılan olarak false
   }
 
   Future<void> _toggleBookmark() async {
@@ -162,14 +175,24 @@ class _ContentCardState extends State<ContentCard> {
       return;
     }
     if (_isBookmarking || !mounted) return;
-    setState(() { _isBookmarking = true; _isBookmarked = !_isBookmarked; });
+    final bool newBookmarkState = !_isBookmarked;
+    setState(() { _isBookmarking = true; _isBookmarked = newBookmarkState; });
     try {
-      // TODO: Firestore'a kaydetme/kaldırma işlemini yap
-      // await _firestoreServisi.toggleGonderiBookmark(widget.gonderiId, widget.aktifKullaniciId, _isBookmarked);
-      print("Bookmark toggled: $_isBookmarked for ${widget.gonderiId}");
-      await Future.delayed(const Duration(milliseconds: 300)); // Simülasyon
+      // TODO: Firestore'a veya yerel depoya kaydetme/kaldırma işlemini yap.
+      // Örneğin: await _firestoreServisi.toggleGonderiBookmark(
+      //   gonderiId: widget.gonderiId,
+      //   kullaniciId: widget.aktifKullaniciId,
+      //   isBookmarked: newBookmarkState,
+      // );
+      print("Bookmark durumu değişti: $newBookmarkState, Gönderi ID: ${widget.gonderiId}");
+      await Future.delayed(const Duration(milliseconds: 350)); // Sunucu isteği simülasyonu
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(newBookmarkState ? "Gönderi kaydedildi." : "Kaydedilenlerden çıkarıldı."), duration: const Duration(seconds: 1)),
+        );
+      }
     } catch (e) {
-      if (mounted) { setState(() => _isBookmarked = !_isBookmarked);
+      if (mounted) { setState(() => _isBookmarked = !newBookmarkState); // Hata durumunda geri al
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Kaydetme işlemi sırasında bir hata oluştu.")));
       }
     } finally {
@@ -177,46 +200,42 @@ class _ContentCardState extends State<ContentCard> {
     }
   }
 
-  // <<<--- YENİ PAYLAŞMA METODU ---<<<
   Future<void> _handleShare() async {
-    String shareText = "${widget.userName} Pathbook'ta harika bir yer paylaştı!\n";
-    if (widget.location.isNotEmpty) {
-      shareText += "Konum: ${widget.location}\n";
-    }
+    String shareText = "Pathbook'ta harika bir keşif!\n";
+    if (widget.userName.isNotEmpty) shareText += "${widget.userName} paylaştı: ";
     if (widget.description != null && widget.description!.isNotEmpty) {
-      shareText += "\"${widget.description!.length > 80 ? widget.description!.substring(0, 80) + "..." : widget.description!}\"\n";
+      shareText += "\"${widget.description!.length > 70 ? widget.description!.substring(0, 70) + "..." : widget.description!}\"\n";
     }
-    // TODO: Uygulamanızın linkini veya gönderiye özel bir deep link ekleyin.
-    // Örnek: shareText += "\nDetaylar için: https://pathbook.app/post/${widget.gonderiId}";
-    shareText += "\nPathbook'u indir ve sen de keşfet!";
 
-    // İsteğe bağlı: Resmi de paylaşmak isterseniz (daha karmaşık)
-    // List<XFile> filesToShare = [];
-    // if (widget.resimUrls.isNotEmpty) {
-    //   // Resmi indirip geçici dosyaya kaydetme ve XFile listesine ekleme mantığı buraya gelecek.
-    //   // Örneğin: http ve path_provider paketleri kullanılabilir.
-    // }
+    String locationInfo = "";
+    // Önce genel konum etiketi, sonra şehir, sonra ülke (varsa ve farklıysa)
+    if (widget.location != null && widget.location!.isNotEmpty) locationInfo += widget.location!;
+    if (widget.sehir != null && widget.sehir!.isNotEmpty) {
+      if (locationInfo.isNotEmpty && !locationInfo.toLowerCase().contains(widget.sehir!.toLowerCase())) locationInfo += ", ";
+      if(!locationInfo.toLowerCase().contains(widget.sehir!.toLowerCase())) locationInfo += widget.sehir!;
+    }
+    if (widget.ulke != null && widget.ulke!.isNotEmpty) {
+      if (locationInfo.isNotEmpty && !locationInfo.toLowerCase().contains(widget.ulke!.toLowerCase())) locationInfo += ", ";
+      if(!locationInfo.toLowerCase().contains(widget.ulke!.toLowerCase())) locationInfo += widget.ulke!;
+    }
+
+    if (locationInfo.isNotEmpty) shareText += "📍 $locationInfo\n";
+    else if (widget.category != null && widget.category!.isNotEmpty) shareText += "Kategori: ${widget.category}\n";
+
+    // TODO: Uygulamanızın Play Store/App Store linkini veya gönderiye özel bir deep link ekleyin.
+    shareText += "\n#PathbookApp https://pathbook.app/post/${widget.gonderiId}";
 
     try {
-      // if (filesToShare.isNotEmpty) {
-      //   await Share.shareXFiles(filesToShare, text: shareText, subject: "Pathbook'tan Bir Keşif!");
-      // } else {
       await Share.share(shareText, subject: "Pathbook'tan Bir Keşif!");
-      // }
     } catch (e) {
       print("ContentCard - Paylaşma hatası: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('İçerik paylaşılamadı.')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('İçerik paylaşılamadı.')));
     }
   }
-  // <<<--- PAYLAŞMA METODU SONU ---<<<
 
   Widget _buildCardHeader(ThemeData theme, TextTheme textTheme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      padding: const EdgeInsets.fromLTRB(12.0, 10.0, 8.0, 6.0), // Padding ayarlandı
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
@@ -233,7 +252,7 @@ class _ContentCardState extends State<ContentCard> {
           Expanded(
             child: Text(
               widget.userName,
-              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: _headerFontSize, letterSpacing: 0.2),
+              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: _headerFontSize, letterSpacing: 0.15),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -245,7 +264,7 @@ class _ContentCardState extends State<ContentCard> {
                 borderRadius: BorderRadius.circular(20),
                 child: Padding(
                   padding: const EdgeInsets.all(6.0),
-                  child: Icon(Icons.more_horiz_rounded, color: theme.iconTheme.color?.withOpacity(0.65), size: 22),
+                  child: Icon(Icons.more_horiz_rounded, color: theme.iconTheme.color?.withOpacity(0.7), size: 22),
                 ),
               ),
             ),
@@ -256,139 +275,139 @@ class _ContentCardState extends State<ContentCard> {
 
   Widget _buildActionToolbar(ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 0.0), // Yatay padding ayarlandı
       child: Row(
         children: <Widget>[
-          _buildInteractiveButton(
-            icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: _isLiked ? _highlightColor : theme.iconTheme.color,
-            onPressed: _isLiking ? null : _toggleLike,
-          ),
-          _buildInteractiveButton(
-            icon: Icons.maps_ugc_outlined, // Yorum ikonu
-            onPressed: () => widget.onCommentTap?.call(widget.gonderiId),
-          ),
-          _buildInteractiveButton(
-            icon: Icons.share_outlined, // <<<--- PAYLAŞIM İKONU GÜNCELLENDİ
-            onPressed: _handleShare,     // <<<--- YENİ METODU ÇAĞIRIYOR
-          ),
+          _buildInteractiveButton(icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: _isLiked ? Colors.redAccent[100] : theme.iconTheme.color?.withOpacity(0.8), onPressed: _isLiking ? null : _toggleLike, tooltip: "Beğen"),
+          _buildInteractiveButton(icon: Icons.mode_comment_outlined, onPressed: () => widget.onCommentTap?.call(widget.gonderiId), tooltip: "Yorum Yap"),
+          _buildInteractiveButton(icon: Icons.send_outlined, onPressed: _handleShare, tooltip: "Paylaş"),
           const Spacer(),
-          _buildInteractiveButton(
-            icon: _isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
-            color: _isBookmarked ? theme.colorScheme.secondary : theme.iconTheme.color,
-            onPressed: _isBookmarking ? null : _toggleBookmark,
-          ),
+          _buildInteractiveButton(icon: _isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: _isBookmarked ? theme.colorScheme.primary : theme.iconTheme.color?.withOpacity(0.8), onPressed: _isBookmarking ? null : _toggleBookmark, tooltip: _isBookmarked ? "Kaydedilenlerden Çıkar" : "Kaydet"),
         ],
       ),
     );
   }
 
-  Widget _buildInteractiveButton({
-    required IconData icon,
-    Color? color,
-    VoidCallback? onPressed,
-  }) {
+  Widget _buildInteractiveButton({required IconData icon, Color? color, VoidCallback? onPressed, String? tooltip}) {
     final theme = Theme.of(context);
     return IconButton(
       icon: Icon(icon, size: _actionIconSize),
-      color: color ?? theme.iconTheme.color?.withOpacity(0.7),
+      color: color ?? theme.iconTheme.color?.withOpacity(0.75),
       onPressed: onPressed,
-      splashRadius: _actionIconSize + 2,
-      padding: const EdgeInsets.all(8.0),
+      splashRadius: _actionIconSize + 6, // Tıklama alanı biraz artırıldı
+      padding: const EdgeInsets.all(10.0),
       constraints: const BoxConstraints(),
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+      visualDensity: VisualDensity.compact,
+      tooltip: tooltip,
     );
   }
 
-  Widget _buildMetaSection(ThemeData theme) {
-    final TextStyle metaTextStyle = TextStyle(
-      fontSize: _metaFontSize, // _metaFontSize = 11.0 olarak tanımlanmıştı
-      color: _highlightColor,   // _highlightColor = Colors.redAccent[200]! olarak tanımlanmıştı
-      fontWeight: FontWeight.w500,
+  Widget _buildMetaChip({required IconData icon, required String label, required ThemeData theme, Color? color, VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 2.5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: _metaIconSize - 1.5, color: color ?? theme.textTheme.bodySmall?.color?.withOpacity(0.75)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: _metaFontSize - 0.5, fontWeight: FontWeight.w500, color: color ?? theme.textTheme.bodySmall?.color?.withOpacity(0.9)),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
+  }
 
-    bool hasLocation = widget.location.isNotEmpty;
+  Widget _buildMetaSection(ThemeData theme, TextTheme textTheme) {
     bool hasCategory = widget.category != null && widget.category!.isNotEmpty;
+    bool hasUlke = widget.ulke != null && widget.ulke!.isNotEmpty;
+    bool hasSehir = widget.sehir != null && widget.sehir!.isNotEmpty;
+    bool hasLocationTag = widget.location != null && widget.location!.isNotEmpty;
 
-    // Eğer hem konum hem de kategori yoksa, boş bir widget döndürerek hiç yer kaplamamasını sağla
-    if (!hasLocation && !hasCategory) return const SizedBox.shrink();
+    if (!hasCategory && !hasUlke && !hasSehir && !hasLocationTag && _likeCount == 0 && widget.initialCommentCount == 0 && (widget.description == null || widget.description!.isEmpty)) {
+      return const SizedBox(height: 6.0); // Hiçbir şey yoksa küçük bir alt boşluk
+    }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 6.0), // Dikey padding azaltılmıştı
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(12.0, 2.0, 12.0, 6.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Konum bilgisi varsa göster
-          if (hasLocation)
-            Flexible( // Uzun konum isimlerinin taşmasını engellemek için Flexible
-              child: InkWell( // Konuma tıklanabilir yapmak için (ileride bir işlev eklenebilir)
-                onTap: (){
-                  print("Konuma tıklandı: ${widget.location}");
-                  // TODO: Konuma tıklandığında harita açma veya filtreleme işlevi eklenebilir
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min, // Row'un içeriği kadar yer kaplamasını sağlar
-                  children: [
-                    Icon(Icons.location_on, size: _metaIconSize, color: _highlightColor), // _metaIconSize = 13.5
-                    const SizedBox(width: 3),
-                    Flexible( // Metnin de taşmasını engelle
-                      child: Text(
-                        widget.location,
-                        style: metaTextStyle,
-                        overflow: TextOverflow.ellipsis, // Taşarsa "..." ile bitir
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // Eğer hem konum hem de kategori varsa, aralarına bir ayırıcı (nokta) koy
-          if (hasLocation && hasCategory)
+          if (_likeCount > 0)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5.0), // Boşluk azaltılmıştı
-              child: Text(
-                "•", // Ayırıcı karakter
-                style: TextStyle(color: Colors.grey[500], fontSize: _metaFontSize), // Ayırıcı stili
+              padding: const EdgeInsets.only(bottom: 4.0),
+              child: Text("$_likeCount beğeni", style: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: _likeCommentFontSize, color: textTheme.bodyLarge?.color?.withOpacity(0.95))),
+            ),
+          if (widget.description != null && widget.description!.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: widget.initialCommentCount > 0 || hasCategory || hasUlke || hasSehir || hasLocationTag ? 5.0 : 2.0),
+              child: RichText(
+                  text: TextSpan(
+                      style: textTheme.bodyMedium?.copyWith(fontSize: _descriptionFontSize, color: theme.textTheme.bodyMedium?.color, height: 1.4),
+                      children: [
+                        TextSpan(
+                          text: "${widget.userName} ",
+                          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: _descriptionFontSize, color: textTheme.bodyLarge?.color),
+                          recognizer: TapGestureRecognizer()..onTap = widget.onProfileTap,
+                        ),
+                        TextSpan(
+                            text: _showFullDescription || widget.description!.length <= 80 ? widget.description! : widget.description!.substring(0, 80),
+                            style: textTheme.bodyMedium?.copyWith(fontSize: _descriptionFontSize, color: textTheme.bodyMedium?.color?.withOpacity(0.9))
+                        ),
+                        if (!_showFullDescription && widget.description!.length > 80)
+                          TextSpan(
+                            text: " ...devamı",
+                            style: textTheme.bodySmall?.copyWith(color: Colors.grey[500], fontWeight: FontWeight.normal, fontSize: _descriptionFontSize - 1.5),
+                            recognizer: TapGestureRecognizer()..onTap = () { if(mounted) setState(() => _showFullDescription = true); },
+                          )
+                      ]
+                  ),
+                  maxLines: _showFullDescription ? null : 2,
+                  overflow: TextOverflow.ellipsis
               ),
             ),
-
-          // Kategori bilgisi varsa göster
-          if (hasCategory)
-            Flexible( // Uzun kategori isimlerinin taşmasını engellemek için Flexible
-              child: InkWell( // Kategoriye tıklanabilir yapmak için
-                onTap: (){
-                  print("Kategoriye tıklandı: ${widget.category}");
-                  // TODO: Kategoriye tıklandığında o kategoriye göre filtreleme işlevi eklenebilir
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(_getCategoryIcon(widget.category!), size: _metaIconSize, color: _highlightColor),
-                    const SizedBox(width: 3),
-                    Flexible( // Metnin de taşmasını engelle
-                      child: Text(
-                        widget.category!,
-                        style: metaTextStyle,
-                        overflow: TextOverflow.ellipsis, // Taşarsa "..." ile bitir
-                      ),
-                    ),
-                  ],
-                ),
+          if (widget.initialCommentCount > 0)
+            Padding(
+              padding: EdgeInsets.only(bottom: (hasCategory || hasUlke || hasSehir || hasLocationTag) ? 5.0 : 2.0),
+              child: InkWell(
+                  onTap: () => widget.onCommentTap?.call(widget.gonderiId),
+                  child: Text(
+                      widget.initialCommentCount == 1 ? "1 yorumu görüntüle" : "${widget.initialCommentCount} yorumun tümünü görüntüle",
+                      style: textTheme.bodySmall?.copyWith(color: Colors.grey[600], fontSize: _likeCommentFontSize - 1)
+                  )
               ),
+            ),
+          if (hasCategory || hasUlke || hasSehir || hasLocationTag)
+            Wrap(
+              spacing: 6.0,
+              runSpacing: 2.0,
+              alignment: WrapAlignment.start,
+              children: [
+                if (hasCategory) _buildMetaChip(icon: _getCategoryIcon(widget.category!), label: widget.category!, theme: theme, color: _metaHighlightColor, onTap: () { /* TODO: Kategori filtreleme */ }),
+                if (hasUlke) _buildMetaChip(icon: Icons.public_outlined, label: widget.ulke!, theme: theme, onTap: () { /* TODO: Ülke filtreleme */ }),
+                if (hasSehir) _buildMetaChip(icon: Icons.location_city_rounded, label: widget.sehir!, theme: theme, onTap: () { /* TODO: Şehir filtreleme */ }),
+                if (hasLocationTag && !( (widget.sehir != null && widget.location!.contains(widget.sehir!)) || (widget.ulke != null && widget.location!.contains(widget.ulke!)) ) ) // Konum etiketi, şehir veya ülke adını içermiyorsa göster
+                  _buildMetaChip(icon: Icons.push_pin_outlined, label: widget.location!, theme: theme, onTap: () { /* TODO: Konum etiketine özel işlem */ }),
+              ],
             ),
         ],
       ),
     );
   }
 
-  // _getCategoryIcon metodu da ContentCard içinde bulunmalı:
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
       case 'doğa': return Icons.landscape_outlined;
-      case 'tarih': return Icons.fort_outlined; // veya Icons.account_balance_outlined
-      case 'kültür': return Icons.attractions_outlined; // veya Icons.palette_outlined
+      case 'tarih': return Icons.account_balance_outlined;
+      case 'kültür': return Icons.palette_outlined;
       case 'yeme-içme': return Icons.restaurant_menu_outlined;
-      default: return Icons.local_offer_outlined; // Varsayılan ikon
+      default: return Icons.label_outline_rounded;
     }
   }
 
@@ -396,39 +415,13 @@ class _ContentCardState extends State<ContentCard> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final TextTheme textTheme = theme.textTheme;
-    final bool hasDescription = widget.description != null && widget.description!.isNotEmpty;
-
-    List<InlineSpan> descriptionSpans = [];
-    if (hasDescription) {
-      descriptionSpans.add(TextSpan(
-        text: "${widget.userName} ",
-        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white), // Renk eklendi
-        recognizer: TapGestureRecognizer()..onTap = widget.onProfileTap,
-      ));
-      if (_showFullDescription || widget.description!.length <= 80) {
-        descriptionSpans.add(TextSpan(text: widget.description!, style: TextStyle(color: Colors.grey[300]))); // Renk eklendi
-      } else {
-        descriptionSpans.add(TextSpan(text: widget.description!.substring(0, 80), style: TextStyle(color: Colors.grey[300])));
-        descriptionSpans.add(
-            TextSpan(
-              text: " ...daha fazla",
-              style: TextStyle(color: Colors.grey[500], fontWeight: FontWeight.normal),
-              recognizer: TapGestureRecognizer()..onTap = () { if(mounted) setState(() => _showFullDescription = true); },
-            )
-        );
-      }
-    }
-
     String? anaResimUrl = widget.resimUrls.isNotEmpty ? widget.resimUrls[0] : null;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
+      margin: const EdgeInsets.symmetric(vertical: 0.0), // Dikey margin sıfırlandı
       decoration: BoxDecoration(
-        color: theme.cardColor, // Tema rengi kullanıldı
-        border: Border(
-          top: BorderSide(color: theme.dividerColor.withOpacity(0.15), width: 0.5),
-          bottom: BorderSide(color: theme.dividerColor.withOpacity(0.15), width: 0.5),
-        ),
+        color: theme.cardTheme.color ?? theme.canvasColor, // Arka plan rengi için cardTheme veya canvasColor
+        border: Border(bottom: BorderSide(color: theme.dividerColor.withOpacity(0.2), width: 0.65)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -445,29 +438,20 @@ class _ContentCardState extends State<ContentCard> {
                   fit: StackFit.expand,
                   children: [
                     Image.network(anaResimUrl, fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.1), child: Center(child: CircularProgressIndicator(strokeWidth: 1.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.7)))));
-                      },
-                      errorBuilder: (context, error, stackTrace) => Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.2), child: Center(child: Icon(Icons.sentiment_very_dissatisfied_outlined, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4), size: 40))),
+                      loadingBuilder: (context, child, loadingProgress) => loadingProgress == null ? child : Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.05), child: Center(child: CircularProgressIndicator(strokeWidth: 1.8, valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.6))))),
+                      errorBuilder: (context, error, stackTrace) => Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.1), child: Center(child: Icon(Icons.broken_image_outlined, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.35), size: 35))),
                     ),
                     if (widget.resimUrls.length > 1)
-                      Positioned(bottom: 10.0, right: 10.0, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0), decoration: BoxDecoration(color: Colors.black.withOpacity(0.75), borderRadius: BorderRadius.circular(20.0)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.collections_rounded, color: Colors.white, size: 13), const SizedBox(width: 4), Text("${widget.resimUrls.length}", style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600))]))),
+                      Positioned(top: 8.0, right: 8.0, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 3.0), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(12.0)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.photo_library_outlined, color: Colors.white.withOpacity(0.85), size: 10), const SizedBox(width: 3), Text("${widget.resimUrls.length}", style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))]))),
                   ],
                 ),
               ),
             )
           else
-            AspectRatio(aspectRatio: 1.8 / 1, child: Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.1), child: Center(child: Icon(Icons.image_search_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.35))))),
+            AspectRatio(aspectRatio: 1.7 / 1, child: Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.05), child: Center(child: Icon(Icons.image_not_supported_outlined, size: 30, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3))))),
           _buildActionToolbar(theme),
-          if (_likeCount > 0)
-            Padding(padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 0.0), child: Text("$_likeCount kişi beğendi", style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: _likeCountFontSize, color: textTheme.bodyMedium?.color?.withOpacity(0.9)))), // Renk opaklığı
-          if (hasDescription)
-            Padding(padding: EdgeInsets.fromLTRB(12.0, _likeCount > 0 ? 2.0 : 6.0, 12.0, 2.0), child: RichText(text: TextSpan(style: textTheme.bodyMedium?.copyWith(fontSize: _descriptionFontSize, color: theme.textTheme.bodyMedium?.color, height: 1.4), children: descriptionSpans), maxLines: _showFullDescription ? null : 2, overflow: TextOverflow.ellipsis)),
-          if (_commentCount > 0)
-            Padding(padding: const EdgeInsets.fromLTRB(12.0, 2.0, 12.0, 4.0), child: InkWell(onTap: () => widget.onCommentTap?.call(widget.gonderiId), child: Text(_commentCount == 1 ? "1 yorumu görüntüle" : "$_commentCount yorumun tümünü görüntüle", style: textTheme.bodySmall?.copyWith(color: Colors.grey[550], fontSize: 12.0)))),
-          _buildMetaSection(theme),
-          const SizedBox(height: 8.0),
+          _buildMetaSection(theme, textTheme), // Beğeni, açıklama, yorum ve diğer meta bilgiler
+          const SizedBox(height: 8.0), // Kartın en altına genel bir boşluk
         ],
       ),
     );

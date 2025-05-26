@@ -1,8 +1,8 @@
-// pathbooks/servisler/firestore_servisi.dart
+// lib/servisler/firestore_servisi.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pathbooks/modeller/kullanici.dart';
 import 'package:pathbooks/modeller/gonderi.dart';
-import 'package:pathbooks/modeller/dosya_modeli.dart';
+import 'package:pathbooks/modeller/dosya_modeli.dart'; // Kullanılıyorsa kalsın
 import 'package:pathbooks/modeller/oneri_modeli.dart';
 
 class FirestoreServisi {
@@ -14,6 +14,7 @@ class FirestoreServisi {
   final String _yorumlarAltKoleksiyonu = "yorumlar";
   final String _onerilerKoleksiyonu = "oneriler";
 
+  // --- KULLANICI İŞLEMLERİ ---
   Future<void> kullaniciOlustur({
     required String id,
     required String email,
@@ -85,9 +86,7 @@ class FirestoreServisi {
     required String id,
     required Map<String, dynamic> veri,
   }) async {
-    if (id.isEmpty) {
-      throw ArgumentError("Kullanıcı ID'si boş olamaz.");
-    }
+    if (id.isEmpty) throw ArgumentError("Kullanıcı ID'si boş olamaz.");
     try {
       Map<String, dynamic> guncellenecekVeri = Map.from(veri);
       guncellenecekVeri['guncellenmeZamani'] = FieldValue.serverTimestamp();
@@ -99,6 +98,7 @@ class FirestoreServisi {
     }
   }
 
+  // --- GÖNDERİ İŞLEMLERİ ---
   Future<void> gonderiOlustur({
     required String yayinlayanId,
     required List<String> gonderiResmiUrls,
@@ -111,26 +111,18 @@ class FirestoreServisi {
     if (yayinlayanId.isEmpty) throw ArgumentError("Yayınlayan ID'si boş olamaz.");
     if (gonderiResmiUrls.isEmpty) throw ArgumentError("Gönderi resmi URL listesi boş olamaz.");
     if (kategori.isEmpty) throw ArgumentError("Kategori boş olamaz.");
-
     try {
       Map<String, dynamic> gonderiVerisi = {
-        "kullaniciId": yayinlayanId,
-        "resimUrls": gonderiResmiUrls,
-        "aciklama": aciklama.trim(),
+        "kullaniciId": yayinlayanId, "resimUrls": gonderiResmiUrls, "aciklama": aciklama.trim(),
         "konum": konum?.trim().isNotEmpty == true ? konum!.trim() : null,
-        "kategori": kategori,
-        "begeniSayisi": 0,
-        "yorumSayisi": 0,
+        "kategori": kategori, "begeniSayisi": 0, "yorumSayisi": 0,
         "olusturulmaZamani": FieldValue.serverTimestamp(),
       };
       if (ulke != null && ulke.trim().isNotEmpty) gonderiVerisi['ulke'] = ulke.trim();
       if (sehir != null && sehir.trim().isNotEmpty) gonderiVerisi['sehir'] = sehir.trim();
       await _firestore.collection(_gonderilerKoleksiyonu).add(gonderiVerisi);
       DocumentReference kullaniciRef = _firestore.collection(_kullanicilarKoleksiyonu).doc(yayinlayanId);
-      await kullaniciRef.update({
-        "gonderiSayisi": FieldValue.increment(1),
-        "guncellenmeZamani": FieldValue.serverTimestamp(),
-      });
+      await kullaniciRef.update({"gonderiSayisi": FieldValue.increment(1), "guncellenmeZamani": FieldValue.serverTimestamp()});
     } on FirebaseException catch (e) {
       throw Exception("Gönderi oluşturulurken bir sunucu hatası oluştu: ${e.message}");
     } catch (e) {
@@ -140,73 +132,93 @@ class FirestoreServisi {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> kullaniciGonderileriniGetir(String kullaniciId) {
     if (kullaniciId.isEmpty) return Stream.empty();
-    return _firestore
-        .collection(_gonderilerKoleksiyonu)
+    return _firestore.collection(_gonderilerKoleksiyonu)
         .where('kullaniciId', isEqualTo: kullaniciId)
         .orderBy('olusturulmaZamani', descending: true)
         .snapshots();
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> akisGonderileriniGetir({
-    DocumentSnapshot? sonGorunenGonderi,
-    int limit = 7,
+  // YENİ: Kullanıcının belirli bir şehirdeki gönderilerini getirir
+  Stream<QuerySnapshot<Map<String, dynamic>>> kullanicininSehirGonderileriniGetir({
+    required String kullaniciId,
+    required String sehir,
   }) {
-    Query<Map<String, dynamic>> sorgu = _firestore
-        .collection(_gonderilerKoleksiyonu)
-        .orderBy('olusturulmaZamani', descending: true);
+    if (kullaniciId.isEmpty || sehir.isEmpty) return Stream.empty();
+    return _firestore.collection(_gonderilerKoleksiyonu)
+        .where('kullaniciId', isEqualTo: kullaniciId)
+        .where('sehir', isEqualTo: sehir)
+        .orderBy('olusturulmaZamani', descending: true)
+        .snapshots()
+        .handleError((error, stackTrace) {
+      print("Firestore Stream Hatası (kullanicininSehirGonderileriniGetir): $error \n$stackTrace");
+      if (error is FirebaseException && error.code == 'failed-precondition') {
+        print("EKSİK INDEX UYARISI! (kullanicininSehirGonderileriniGetir) Firebase konsolunda index oluşturun. Mesaj: ${error.message}");
+      }
+      return Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
+    });
+  }
+
+  // YENİ: Kullanıcının gönderi yaptığı tüm benzersiz şehirleri getirir
+  Future<List<String>> kullanicininPaylastigiSehirleriGetir(String kullaniciId) async {
+    if (kullaniciId.isEmpty) return [];
+    try {
+      QuerySnapshot<Map<String, dynamic>> snapshot = await _firestore
+          .collection(_gonderilerKoleksiyonu)
+          .where('kullaniciId', isEqualTo: kullaniciId)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final Set<String> sehirlerSeti = {};
+        for (var doc in snapshot.docs) {
+          final String? sehir = doc.data()['sehir'] as String?;
+          if (sehir != null && sehir.trim().isNotEmpty) {
+            sehirlerSeti.add(sehir.trim());
+          }
+        }
+        List<String> sehirListesi = sehirlerSeti.toList();
+        sehirListesi.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        return sehirListesi;
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print("FirestoreServisi - Kullanıcının paylaştığı şehirler getirilirken hata: $e");
+      return [];
+    }
+  }
+
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> akisGonderileriniGetir({DocumentSnapshot? sonGorunenGonderi, int limit = 7}) {
+    Query<Map<String, dynamic>> sorgu = _firestore.collection(_gonderilerKoleksiyonu).orderBy('olusturulmaZamani', descending: true);
     if (sonGorunenGonderi != null) sorgu = sorgu.startAfterDocument(sonGorunenGonderi);
     sorgu = sorgu.limit(limit);
     return sorgu.snapshots();
   }
 
   Future<Map<String, dynamic>> gonderileriGetirFiltreleSirala({
-    String? aramaMetni,
-    String? kategori,
-    String? ulke,
-    String? sehir,
-    String siralamaAlani = 'olusturulmaZamani',
-    bool azalan = true,
-    int limitSayisi = 7,
-    DocumentSnapshot? sonGorunenDoc,
+    String? aramaMetni, String? kategori, String? ulke, String? sehir,
+    String siralamaAlani = 'olusturulmaZamani', bool azalan = true,
+    int limitSayisi = 7, DocumentSnapshot? sonGorunenDoc,
   }) async {
-    print("FirestoreServisi: gonderileriGetirFiltreleSirala -> Kategori: $kategori, Ülke: $ulke, Şehir: $sehir, Arama: '$aramaMetni', Sıralama: $siralamaAlani ($azalan)");
     try {
       Query<Map<String, dynamic>> sorgu = _firestore.collection(_gonderilerKoleksiyonu);
-
-      if (kategori != null && kategori.isNotEmpty && kategori.toLowerCase() != "tümü") {
-        sorgu = sorgu.where('kategori', isEqualTo: kategori);
-      }
-      if (ulke != null && ulke.isNotEmpty && ulke.toLowerCase() != "tümü") {
-        sorgu = sorgu.where('ulke', isEqualTo: ulke);
-      }
-      if (sehir != null && sehir.isNotEmpty && sehir.toLowerCase() != "tümü") {
-        sorgu = sorgu.where('sehir', isEqualTo: sehir);
-      }
-
+      if (kategori != null && kategori.isNotEmpty && kategori.toLowerCase() != "tümü") sorgu = sorgu.where('kategori', isEqualTo: kategori);
+      if (ulke != null && ulke.isNotEmpty && ulke.toLowerCase() != "tümü") sorgu = sorgu.where('ulke', isEqualTo: ulke);
+      if (sehir != null && sehir.isNotEmpty && sehir.toLowerCase() != "tümü") sorgu = sorgu.where('sehir', isEqualTo: sehir);
       sorgu = sorgu.orderBy(siralamaAlani, descending: azalan);
       if (sonGorunenDoc != null) sorgu = sorgu.startAfterDocument(sonGorunenDoc);
       sorgu = sorgu.limit(limitSayisi);
-
       QuerySnapshot<Map<String, dynamic>> snapshot = await sorgu.get();
       List<Gonderi> gonderilerListesi = [];
       DocumentSnapshot? enSonCekilenDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-
       for (var doc in snapshot.docs) {
         Kullanici? yayinlayanKullanici;
         final String? kullaniciId = doc.data()['kullaniciId'] as String?;
-        if (kullaniciId != null && kullaniciId.isNotEmpty) {
-          yayinlayanKullanici = await kullaniciGetir(kullaniciId);
-        }
+        if (kullaniciId != null && kullaniciId.isNotEmpty) yayinlayanKullanici = await kullaniciGetir(kullaniciId);
         Gonderi gonderi = Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici);
-
         if (aramaMetni != null && aramaMetni.trim().isNotEmpty) {
           final String aramaLower = aramaMetni.trim().toLowerCase();
-          bool eslesme = (gonderi.aciklama.toLowerCase().contains(aramaLower)) ||
-              (gonderi.kategori.toLowerCase().contains(aramaLower)) ||
-              (gonderi.konum?.toLowerCase().contains(aramaLower) ?? false) ||
-              (gonderi.ulke?.toLowerCase().contains(aramaLower) ?? false) ||
-              (gonderi.sehir?.toLowerCase().contains(aramaLower) ?? false) ||
-              (gonderi.yayinlayanKullanici?.kullaniciAdi?.toLowerCase().contains(aramaLower) ?? false);
+          bool eslesme = (gonderi.aciklama.toLowerCase().contains(aramaLower)) || (gonderi.kategori.toLowerCase().contains(aramaLower)) || (gonderi.konum?.toLowerCase().contains(aramaLower) ?? false) || (gonderi.ulke?.toLowerCase().contains(aramaLower) ?? false) || (gonderi.sehir?.toLowerCase().contains(aramaLower) ?? false) || (gonderi.yayinlayanKullanici?.kullaniciAdi?.toLowerCase().contains(aramaLower) ?? false);
           if (eslesme) gonderilerListesi.add(gonderi);
         } else {
           gonderilerListesi.add(gonderi);
@@ -214,14 +226,11 @@ class FirestoreServisi {
       }
       return {'gonderiler': gonderilerListesi, 'sonDoc': enSonCekilenDoc};
     } on FirebaseException catch (e, s) {
-      print("FIRESTORE HATA (gonderileriGetirFiltreleSirala): ${e.code} - ${e.message}");
-      if (e.code == 'failed-precondition') {
-        print("EKSİK INDEX UYARISI! Lütfen Firebase konsolunda belirtilen linke giderek index oluşturun. Mesaj: ${e.message}");
-      }
-      print("Stack Trace: \n$s");
+      if (e.code == 'failed-precondition') print("EKSİK INDEX UYARISI! (gonderileriGetirFiltreleSirala) Firebase konsolunda index oluşturun. Mesaj: ${e.message}");
+      print("FIRESTORE HATA (gonderileriGetirFiltreleSirala): ${e.code} - ${e.message}\nStack: $s");
       throw Exception("Gönderiler filtrelenirken bir sunucu hatası oluştu: ${e.message}");
     } catch (e, s) {
-      print("BEKLENMEDİK HATA (gonderileriGetirFiltreleSirala): $e\nStack Trace: \n$s");
+      print("BEKLENMEDİK HATA (gonderileriGetirFiltreleSirala): $e\nStack: $s");
       throw Exception("Gönderiler filtrelenirken beklenmedik bir hata oluştu: $e");
     }
   }
@@ -244,9 +253,7 @@ class FirestoreServisi {
     try {
       DocumentSnapshot begeniDoc = await _firestore.collection(_gonderilerKoleksiyonu).doc(gonderiId).collection(_begenilerAltKoleksiyonu).doc(aktifKullaniciId).get();
       return begeniDoc.exists;
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
   Future<void> gonderiBegenToggle({required String gonderiId, required String aktifKullaniciId}) async {
@@ -295,9 +302,7 @@ class FirestoreServisi {
     Query<Map<String, dynamic>> sorgu = _firestore.collection(_dosyalarKoleksiyonu).orderBy('sonGuncelleme', descending: true);
     if (sonGorunenDosya != null) sorgu = sorgu.startAfterDocument(sonGorunenDosya);
     sorgu = sorgu.limit(limit);
-    return sorgu.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => DosyaModeli.fromFirestore(doc)).toList();
-    }).handleError((error, stackTrace) {
+    return sorgu.snapshots().map((snapshot) => snapshot.docs.map((doc) => DosyaModeli.fromFirestore(doc)).toList()).handleError((error, stackTrace) {
       print("Firestore Stream Hatası (tumDosyalariGetir): $error \n$stackTrace");
       return Stream<List<DosyaModeli>>.value(<DosyaModeli>[]);
     });
