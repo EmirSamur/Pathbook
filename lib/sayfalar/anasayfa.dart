@@ -394,10 +394,10 @@ class _AnasayfaState extends State<Anasayfa> {
           selectedLabelStyle: theme.bottomNavigationBarTheme.selectedLabelStyle?.copyWith(fontWeight: FontWeight.w600) ?? const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
           unselectedLabelStyle: theme.bottomNavigationBarTheme.unselectedLabelStyle ?? const TextStyle(fontSize: 10),
           items: [
-            _buildNavBarItem(iconData: Icons.home_outlined, activeIconData: Icons.home_rounded, label: 'Ana Sayfa', index: 0, theme: theme),
-            _buildNavBarItem(iconData: Icons.search_rounded, activeIconData: Icons.search_off_rounded, label: 'Ara', index: 1, theme: theme, iconSize: 24),
-            _buildNavBarItem(iconData: Icons.add_box_outlined, activeIconData: Icons.add_box_rounded, label: 'Yükle', index: 2, theme: theme, iconSize: 28, isSpecial: true, specialColor: Colors.redAccent[400]),
-            _buildNavBarItem(iconData: Icons.notifications_none_rounded, activeIconData: Icons.notifications_rounded, label: 'Öneriler', index: 3, theme: theme),
+            _buildNavBarItem(iconData: Icons.public, activeIconData: Icons.public, label: 'Ana Sayfa', index: 0, theme: theme),
+            _buildNavBarItem(iconData: Icons.search_rounded, activeIconData: Icons.travel_explore, label: 'Ara', index: 1, theme: theme, iconSize: 24),
+            _buildNavBarItem(iconData:Icons.camera_alt_outlined, activeIconData: Icons.camera_alt_outlined, label: 'Yükle', index: 2, theme: theme, iconSize: 28, isSpecial: true, specialColor: Colors.redAccent[400]),
+            _buildNavBarItem(iconData: Icons.notifications_none_rounded, activeIconData: Icons.notifications_active_rounded, label: 'Öneriler', index: 3, theme: theme),
             BottomNavigationBarItem(
                 icon: _buildProfileIconForNavBar(isSelected: _aktifSayfaNo == 4, profileImageUrl: _aktifKullaniciProfilFotoUrl, theme: theme),
                 label: 'Profil'
