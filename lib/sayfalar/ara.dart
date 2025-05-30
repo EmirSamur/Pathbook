@@ -350,7 +350,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
           gonderiId: gonderi.id,
           resimUrls: gonderi.resimUrls,
           profileUrl: gonderi.yayinlayanKullanici?.fotoUrl ?? "",
-          userName: gonderi.yayinlayanKullanici?.kullaniciAdi ?? "Gezgin",
+          userName: gonderi.yayinlayanKullanici?.kullaniciAdi ?? "Pathbook",
           location: "${gonderi.sehir ?? ''}${gonderi.sehir != null && gonderi.ulke != null ? ', ' : ''}${gonderi.ulke ?? ''}".replaceAll(RegExp(r'^, |,$'), '').trim().isNotEmpty
               ? "${gonderi.sehir ?? ''}${gonderi.sehir != null && gonderi.ulke != null ? ', ' : ''}${gonderi.ulke ?? ''}"
               : gonderi.konum ?? "", // Eğer şehir/ülke varsa onları, yoksa konumu göster
