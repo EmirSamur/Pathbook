@@ -311,6 +311,8 @@ class _AnasayfaState extends State<Anasayfa> {
               theme
           ),
 
+
+
           const SizedBox(width: 10),
           _buildFilterChip(
               "Takip Edilenler",
