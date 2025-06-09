@@ -1,9 +1,11 @@
-// lib/servisler/firestore_servisi.dart
+// pathbooks/servisler/firestore_servisi.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:pathbooks/modeller/kullanici.dart';
+import 'package:pathbooks/modeller/kullanici.dart'; // Kullanici modelinin isVerified alanını içerdiğinden emin ol
 import 'package:pathbooks/modeller/gonderi.dart';
-import 'package:pathbooks/modeller/dosya_modeli.dart'; // Kullanılıyorsa kalsın
+import 'package:pathbooks/modeller/dosya_modeli.dart';
 import 'package:pathbooks/modeller/oneri_modeli.dart';
+// StoryModeli importu burada gerekli değil gibi, eğer story ile ilgili metodlar yoksa.
+// import 'package:pathbooks/modeller/story_modeli.dart';
 
 class FirestoreServisi {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -13,6 +15,7 @@ class FirestoreServisi {
   final String _begenilerAltKoleksiyonu = "begenenKullanicilar";
   final String _yorumlarAltKoleksiyonu = "yorumlar";
   final String _onerilerKoleksiyonu = "oneriler";
+  // final String _storiesKoleksiyonu = "stories"; // Eğer story özelliği varsa bu da tanımlanmalı
 
   // --- KULLANICI İŞLEMLERİ ---
   Future<void> kullaniciOlustur({
@@ -32,8 +35,9 @@ class FirestoreServisi {
         "takipciSayisi": 0,
         "takipEdilenSayisi": 0,
         "guncellenmeZamani": FieldValue.serverTimestamp(),
+        "isVerified": false, // <<<--- YENİ EKLENEN ALAN (Varsayılan olarak false)
       });
-      print("Firestore: Kullanıcı belgesi oluşturuldu (ID: $id)");
+      print("Firestore: Kullanıcı belgesi oluşturuldu (ID: $id), isVerified: false");
     } on FirebaseException catch (e) {
       print("Firestore Hatası (kullaniciOlustur): Kod: ${e.code}, Mesaj: ${e.message}");
       throw Exception("Kullanıcı profili oluşturulamadı: ${e.message}");
@@ -52,7 +56,7 @@ class FirestoreServisi {
       DocumentSnapshot<Map<String, dynamic>> doc =
       await _firestore.collection(_kullanicilarKoleksiyonu).doc(id).get();
       if (doc.exists) {
-        return Kullanici.dokumandanUret(doc);
+        return Kullanici.dokumandanUret(doc); // Kullanici modeli isVerified'ı okuyacak şekilde güncellenmiş olmalı
       } else {
         print("FirestoreServisi: Kullanıcı $id bulunamadı.");
         return null;
@@ -90,7 +94,12 @@ class FirestoreServisi {
     try {
       Map<String, dynamic> guncellenecekVeri = Map.from(veri);
       guncellenecekVeri['guncellenmeZamani'] = FieldValue.serverTimestamp();
+      // 'isVerified' alanının normal kullanıcılar tarafından güncellenmemesi için
+      // Firestore Güvenlik Kuralları'nda kısıtlama olmalı.
+      // Bu metot, admin paneli veya güvenli bir yerden çağrılıyorsa 'isVerified' de güncelleyebilir.
+      // Şimdilik, gelen 'veri' map'inde ne varsa onu güncelliyoruz.
       await _firestore.collection(_kullanicilarKoleksiyonu).doc(id).update(guncellenecekVeri);
+      print("Firestore: Kullanıcı güncellendi (ID: $id)");
     } on FirebaseException catch (e) {
       throw Exception("Kullanıcı bilgileri güncellenirken bir hata oluştu: ${e.message}");
     } catch (e) {
@@ -138,7 +147,6 @@ class FirestoreServisi {
         .snapshots();
   }
 
-  // YENİ: Kullanıcının belirli bir şehirdeki gönderilerini getirir
   Stream<QuerySnapshot<Map<String, dynamic>>> kullanicininSehirGonderileriniGetir({
     required String kullaniciId,
     required String sehir,
@@ -158,15 +166,14 @@ class FirestoreServisi {
     });
   }
 
-  // YENİ: Kullanıcının gönderi yaptığı tüm benzersiz şehirleri getirir
   Future<List<String>> kullanicininPaylastigiSehirleriGetir(String kullaniciId) async {
     if (kullaniciId.isEmpty) return [];
     try {
       QuerySnapshot<Map<String, dynamic>> snapshot = await _firestore
           .collection(_gonderilerKoleksiyonu)
           .where('kullaniciId', isEqualTo: kullaniciId)
+      // .select(['sehir']) // Eğer sadece sehir alanını çekmek istersen ve Firestore destekliyorsa
           .get();
-
       if (snapshot.docs.isNotEmpty) {
         final Set<String> sehirlerSeti = {};
         for (var doc in snapshot.docs) {
@@ -186,7 +193,6 @@ class FirestoreServisi {
       return [];
     }
   }
-
 
   Stream<QuerySnapshot<Map<String, dynamic>>> akisGonderileriniGetir({DocumentSnapshot? sonGorunenGonderi, int limit = 7}) {
     Query<Map<String, dynamic>> sorgu = _firestore.collection(_gonderilerKoleksiyonu).orderBy('olusturulmaZamani', descending: true);

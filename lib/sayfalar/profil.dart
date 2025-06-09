@@ -27,16 +27,17 @@ class _ProfilState extends State<Profil> {
   String _kullaniciAdi = "Yükleniyor...";
   String _hakkinda = "Yükleniyor...";
   String _avatarUrl = "";
-  int _gonderiSayisi = 0; // Filtrelenmiş veya toplam gönderi sayısını gösterecek
-  int _toplamGonderiSayisiCache = 0; // Firestore'dan gelen toplam gönderi sayısı
+  int _gonderiSayisi = 0;
+  int _toplamGonderiSayisiCache = 0;
   int _takipciSayisi = 0;
   int _takipEdilenSayisi = 0;
+  bool _isVerifiedAccount = false; // Mavi tik durumu
 
   late FirestoreServisi _firestoreServisi;
   late YetkilendirmeServisi _yetkilendirmeServisi;
 
   List<String> _kullanicininSehirleri = [];
-  String? _seciliSehirFiltresi; // null ise "Tüm Paylaşımlar"
+  String? _seciliSehirFiltresi;
   bool _sehirlerYukleniyor = true;
   bool _profilBilgileriYukleniyor = true;
 
@@ -52,7 +53,7 @@ class _ProfilState extends State<Profil> {
   void didUpdateWidget(covariant Profil oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.aktifKullanici?.id != oldWidget.aktifKullanici?.id) {
-      _seciliSehirFiltresi = null; // Farklı bir profile geçildiğinde filtreyi sıfırla
+      _seciliSehirFiltresi = null;
       _verileriYukle();
     }
   }
@@ -67,6 +68,7 @@ class _ProfilState extends State<Profil> {
       _toplamGonderiSayisiCache = 0;
       _takipciSayisi = 0;
       _takipEdilenSayisi = 0;
+      _isVerifiedAccount = false;
       _kullanicininSehirleri = [];
       _seciliSehirFiltresi = null;
       _sehirlerYukleniyor = true;
@@ -86,7 +88,6 @@ class _ProfilState extends State<Profil> {
     });
 
     await _kullaniciProfilBilgileriniYukle();
-    // Profil bilgileri yüklendikten sonra, eğer hala mounted ise ve kullanıcı varsa şehirleri yükle
     if (mounted && widget.aktifKullanici != null) {
       await _kullanicininPaylastigiSehirleriGetirServisten();
     }
@@ -106,10 +107,7 @@ class _ProfilState extends State<Profil> {
     }
     Kullanici? kullanici = await _firestoreServisi.kullaniciGetir(widget.aktifKullanici!.id);
     if (kullanici == null) {
-      if (mounted) {
-        _resetKullaniciVerileri();
-        setState(() => _profilBilgileriYukleniyor = false);
-      }
+      if (mounted) { _resetKullaniciVerileri(); setState(() => _profilBilgileriYukleniyor = false); }
       return;
     }
     if (!mounted) return;
@@ -121,6 +119,7 @@ class _ProfilState extends State<Profil> {
       _gonderiSayisi = _seciliSehirFiltresi == null ? _toplamGonderiSayisiCache : _gonderiSayisi;
       _takipciSayisi = kullanici.takipciSayisi ?? 0;
       _takipEdilenSayisi = kullanici.takipEdilenSayisi ?? 0;
+      _isVerifiedAccount = kullanici.isVerified ?? false; // Mavi tik durumu alınıyor
     });
   }
 
@@ -129,12 +128,9 @@ class _ProfilState extends State<Profil> {
     try {
       List<String> sehirler = await _firestoreServisi.kullanicininPaylastigiSehirleriGetir(widget.aktifKullanici!.id);
       if (mounted) {
-        setState(() {
-          _kullanicininSehirleri = sehirler;
-        });
+        setState(() => _kullanicininSehirleri = sehirler);
       }
     } catch (e) {
-      print("Profil - Kullanıcının şehirleri FirestoreServisi'nden getirilirken hata: $e");
       if (mounted) setState(() => _kullanicininSehirleri = []);
     }
   }
@@ -149,7 +145,7 @@ class _ProfilState extends State<Profil> {
     }
     final bool? guncellemeOldu = await Navigator.push(context, MaterialPageRoute(builder: (_) => ProfiliDuzenleSayfasi(mevcutKullanici: widget.aktifKullanici!)));
     if (guncellemeOldu == true && mounted) {
-      await _kullaniciProfilBilgileriniYukle(); // Sadece profil bilgilerini yeniden yükle, şehirler değişmez
+      await _kullaniciProfilBilgileriniYukle();
     }
   }
 
@@ -180,7 +176,7 @@ class _ProfilState extends State<Profil> {
       try {
         await _firestoreServisi.gonderiSil(gonderiId: gonderi.id, kullaniciId: oAnkiAktifKullaniciId);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gönderi başarıyla silindi.'), backgroundColor: Colors.green[600]));
-        await _verileriYukle(); // Hem sayaçları hem de şehir listesini güncelle
+        await _verileriYukle();
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gönderi silinirken bir hata oluştu.'), backgroundColor: Colors.red[600]));
       }
@@ -209,53 +205,31 @@ class _ProfilState extends State<Profil> {
     if (_sehirlerYukleniyor && _kullanicininSehirleri.isEmpty) {
       return SliverToBoxAdapter(child: Container(height: 38, alignment: Alignment.center, child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 1.8, color: theme.primaryColor.withOpacity(0.6)))));
     }
-    // Eğer hiç şehir yoksa (ve "Tümü" de zaten eklenmediyse), bu barı hiç gösterme veya
-    // sadece "Tümü" varsa ve başka şehir yoksa da gösterme, çünkü bir anlamı olmaz.
     if (_kullanicininSehirleri.isEmpty) {
       return SliverToBoxAdapter(child: SizedBox.shrink());
     }
-
     List<Widget> filtreCipleri = [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3.0),
-        child: ChoiceChip(
-          label: Text("Tümü", style: TextStyle(fontSize: 12, color: _seciliSehirFiltresi == null ? Colors.white : Colors.grey[350], fontWeight: _seciliSehirFiltresi == null ? FontWeight.bold : FontWeight.normal)),
-          selected: _seciliSehirFiltresi == null,
-          onSelected: (selected) { if (mounted && selected) setState(() => _seciliSehirFiltresi = null); },
-          backgroundColor: Colors.grey[800]?.withOpacity(0.7),
-          selectedColor: theme.primaryColor,
-          labelPadding: EdgeInsets.symmetric(horizontal: 10),
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.transparent)),
-          visualDensity: VisualDensity.compact,
-        ),
-      )
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 3.0), child: ChoiceChip(
+        label: Text("Tümü", style: TextStyle(fontSize: 12, color: _seciliSehirFiltresi == null ? Colors.white : Colors.grey[350], fontWeight: _seciliSehirFiltresi == null ? FontWeight.bold : FontWeight.normal)),
+        selected: _seciliSehirFiltresi == null,
+        onSelected: (selected) { if (mounted && selected) setState(() => _seciliSehirFiltresi = null); },
+        backgroundColor: Colors.grey[800]?.withOpacity(0.7), selectedColor: theme.primaryColor,
+        labelPadding: EdgeInsets.symmetric(horizontal: 10), padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.transparent)), visualDensity: VisualDensity.compact,
+      ))
     ];
     for (String sehir in _kullanicininSehirleri) {
-      filtreCipleri.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3.0),
-            child: ChoiceChip(
-              label: Text(sehir, style: TextStyle(fontSize: 12, color: _seciliSehirFiltresi == sehir ? Colors.white : Colors.grey[350], fontWeight: _seciliSehirFiltresi == sehir ? FontWeight.bold : FontWeight.normal)),
-              selected: _seciliSehirFiltresi == sehir,
-              onSelected: (selected) { if (mounted && selected) setState(() => _seciliSehirFiltresi = sehir); },
-              avatar: Icon(Icons.location_city_rounded, size: 14, color: _seciliSehirFiltresi == sehir ? Colors.white70 : Colors.grey[500]),
-              backgroundColor: Colors.grey[800]?.withOpacity(0.7),
-              selectedColor: theme.primaryColor,
-              labelPadding: EdgeInsets.only(left: 1, right: 8),
-              padding: EdgeInsets.only(left: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.transparent)),
-              visualDensity: VisualDensity.compact,
-            ),
-          )
-      );
+      filtreCipleri.add(Padding(padding: const EdgeInsets.symmetric(horizontal: 3.0), child: ChoiceChip(
+        label: Text(sehir, style: TextStyle(fontSize: 12, color: _seciliSehirFiltresi == sehir ? Colors.white : Colors.grey[350], fontWeight: _seciliSehirFiltresi == sehir ? FontWeight.bold : FontWeight.normal)),
+        selected: _seciliSehirFiltresi == sehir,
+        onSelected: (selected) { if (mounted && selected) setState(() => _seciliSehirFiltresi = sehir); },
+        avatar: Icon(Icons.location_city_rounded, size: 14, color: _seciliSehirFiltresi == sehir ? Colors.white70 : Colors.grey[500]),
+        backgroundColor: Colors.grey[800]?.withOpacity(0.7), selectedColor: theme.primaryColor,
+        labelPadding: EdgeInsets.only(left: 1, right: 8), padding: EdgeInsets.only(left: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.transparent)), visualDensity: VisualDensity.compact,
+      )));
     }
-    return SliverToBoxAdapter(
-      child: Container(
-        height: 38, margin: const EdgeInsets.only(bottom: 6.0, top: 4.0),
-        child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12.0), children: filtreCipleri),
-      ),
-    );
+    return SliverToBoxAdapter(child: Container(height: 38, margin: const EdgeInsets.only(bottom: 6.0, top: 4.0), child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12.0), children: filtreCipleri)));
   }
 
   Widget _buildGonderiIzgarasi() {
@@ -277,9 +251,7 @@ class _ProfilState extends State<Profil> {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           String errorMessage = 'Paylaşımlar yüklenirken bir sorun oluştu.';
-          if (snapshot.error.toString().contains("FAILED_PRECONDITION") && snapshot.error.toString().contains("index")) {
-            errorMessage = 'Veritabanı yapılandırması gerekiyor. Lütfen tekrar deneyin.';
-          }
+          if (snapshot.error.toString().contains("FAILED_PRECONDITION") && snapshot.error.toString().contains("index")) errorMessage = 'Veritabanı yapılandırması gerekiyor. Lütfen tekrar deneyin.';
           return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(20.0), child: Center(child: Text(errorMessage, style: TextStyle(color: Colors.orangeAccent[100], fontSize: 13.5), textAlign: TextAlign.center))));
         }
         if (snapshot.connectionState == ConnectionState.waiting && !(snapshot.hasData && snapshot.data!.docs.isNotEmpty)) {
@@ -292,17 +264,17 @@ class _ProfilState extends State<Profil> {
           });
           return SliverToBoxAdapter(child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 20.0), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.dynamic_feed_outlined, size: 35, color: Colors.grey[600]), SizedBox(height: 10), Text(mesaj, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontFamily: _fontFamilyBebas, fontSize: 17))]))));
         }
-
         final gonderiDocs = snapshot.data!.docs;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _gonderiSayisi != gonderiDocs.length) {
-            setState(() => _gonderiSayisi = gonderiDocs.length);
+          if (mounted && _gonderiSayisi != gonderiDocs.length) setState(() => _gonderiSayisi = gonderiDocs.length);
+          if (_seciliSehirFiltresi == null && mounted && _toplamGonderiSayisiCache != gonderiDocs.length) {
+            // Kullanıcı modelinden gelen toplam sayı daha güvenilir olabilir,
+            // ama stream'den gelen tüm gönderiler de bir gösterge.
+            // _kullaniciProfilBilgileriniYukle içinde _toplamGonderiSayisiCache güncelleniyor.
+            // Bu satır isteğe bağlı olarak kaldırılabilir veya farklı bir mantıkla güncellenebilir.
+            // setState(() => _toplamGonderiSayisiCache = gonderiDocs.length);
           }
-          // "Tümü" seçiliyken _toplamGonderiSayisiCache'i de güncelle (Kullanici modelinden gelen daha doğru)
-          // Bu kısım _kullaniciProfilBilgileriniYukle içinde zaten _toplamGonderiSayisiCache'i set ediyor.
-          // Burada sadece filtrelenmiş _gonderiSayisi'nı güncellemek yeterli.
         });
-
         return SliverPadding(
           padding: const EdgeInsets.all(1.0),
           sliver: SliverGrid(
@@ -310,22 +282,19 @@ class _ProfilState extends State<Profil> {
             delegate: SliverChildBuilderDelegate(
                   (BuildContext context, int index) {
                 final gonderiDoc = gonderiDocs[index];
-                final Gonderi gonderi = Gonderi.dokumandanUret(gonderiDoc, yayinlayan: widget.aktifKullanici);
+                final Gonderi gonderi = Gonderi.dokumandanUret(gonderiDoc, yayinlayan: widget.aktifKullanici); // yayinlayan: widget.aktifKullanici (görüntülenen profilin sahibi)
                 String? ilkResimUrl = gonderi.resimUrls.isNotEmpty ? gonderi.resimUrls[0] : null;
                 if (ilkResimUrl == null) return Container(decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(1.5)), child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[700], size: 18));
                 return GestureDetector(
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GonderiDetaySayfasi(gonderi: gonderi))),
                   onLongPress: isOwnProfile && gonderi.kullaniciId == oAnkiAktifKullaniciId ? () => _gonderiyiSilOnayiGoster(gonderi) : null,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(1.5),
-                    child: Hero(
-                      tag: "profil_gonderi_resim_${gonderi.id}_${widget.aktifKullanici!.id}",
-                      child: Image.network(ilkResimUrl, fit: BoxFit.cover,
-                        loadingBuilder: (c, child, progress) => progress == null ? child : Container(color: Colors.grey[800]),
-                        errorBuilder: (c, e, s) => Container(color: Colors.grey[850], child: Icon(Icons.broken_image_outlined, color: Colors.grey[600], size: 18)),
-                      ),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(1.5), child: Hero(
+                    tag: "profil_gonderi_resim_${gonderi.id}_${widget.aktifKullanici?.id ?? 'default'}", // widget.aktifKullanici null olabilir
+                    child: Image.network(ilkResimUrl, fit: BoxFit.cover,
+                      loadingBuilder: (c, child, progress) => progress == null ? child : Container(color: Colors.grey[800]),
+                      errorBuilder: (c, e, s) => Container(color: Colors.grey[850], child: Icon(Icons.broken_image_outlined, color: Colors.grey[600], size: 18)),
                     ),
-                  ),
+                  )),
                 );
               },
               childCount: gonderiDocs.length,
@@ -360,7 +329,10 @@ class _ProfilState extends State<Profil> {
           slivers: <Widget>[
             SliverAppBar(
               backgroundColor: Color(0xFF121212), elevation: 0, pinned: true, floating: true, automaticallyImplyLeading: false,
-              title: Text(_kullaniciAdi, style: TextStyle(color: Colors.white, fontFamily: _fontFamilyBebas, fontSize: 20, fontWeight: FontWeight.w500)),
+              title: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Flexible(child: Text(_kullaniciAdi, style: TextStyle(color: Colors.white, fontFamily: _fontFamilyBebas, fontSize: 20, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+                if (_isVerifiedAccount) Padding(padding: const EdgeInsets.only(left: 6.0), child: Icon(Icons.verified_rounded, color: Colors.redAccent[400], size: 18)),
+              ]),
               centerTitle: true,
               actions: <Widget>[
                 if (isCurrentUserProfile)
@@ -383,7 +355,11 @@ class _ProfilState extends State<Profil> {
                 CircleAvatar(radius: 48.0, backgroundColor: Colors.grey[850], backgroundImage: _avatarUrl.isNotEmpty && _avatarUrl.startsWith("http") ? NetworkImage(_avatarUrl) : null, child: _avatarUrl.isEmpty || !_avatarUrl.startsWith("http") ? Icon(Icons.person_outline_rounded, size: 48, color: Colors.grey[700]) : null),
                 if (isCurrentUserProfile) Positioned(bottom: -3, right: -3, child: Material(color: theme.primaryColor, shape: CircleBorder(side: BorderSide(color: Color(0xFF0A0A0A), width: 2.2)), elevation: 2.0, child: InkWell(onTap: _profiliDuzenle, customBorder: CircleBorder(), child: Padding(padding: const EdgeInsets.all(5.0), child: Icon(Icons.edit_rounded, color: Colors.white, size: 15.0))))),
               ]),
-              SizedBox(height: 8.0), Text(_kullaniciAdi, style: TextStyle(color: Colors.white, fontSize: 17.0, fontWeight: FontWeight.bold, fontFamily: _fontFamilyBebas)),
+              SizedBox(height: 8.0),
+              Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Flexible(child: Text(_kullaniciAdi, style: TextStyle(color: Colors.white, fontSize: 17.0, fontWeight: FontWeight.bold, fontFamily: _fontFamilyBebas), overflow: TextOverflow.ellipsis)),
+                if (_isVerifiedAccount) Padding(padding: const EdgeInsets.only(left: 5.0), child: Icon(Icons.verified_user_rounded, color: Colors.redAccent[400], size: 16)),
+              ]),
               SizedBox(height: 4.0),
               if (_hakkinda.isNotEmpty && _hakkinda != "Henüz hakkında bilgisi eklenmemiş.") Padding(padding: const EdgeInsets.symmetric(horizontal: 10.0), child: Text(_hakkinda, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400], fontSize: 12.5, fontFamily: _fontFamilyBebas, height: 1.35), maxLines: 3, overflow: TextOverflow.ellipsis)),
               SizedBox(height: 14.0),
@@ -400,20 +376,10 @@ class _ProfilState extends State<Profil> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 0.0, bottom: 2.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      _seciliSehirFiltresi == null ? "Tüm Paylaşımlar" : "'$_seciliSehirFiltresi' Paylaşımları",
-                      style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 15, fontFamily: _fontFamilyBebas, fontWeight: FontWeight.w500),
-                    ),
-                    // Sadece bir filtre seçiliyse veya hiç gönderi yoksa bile gönderi sayısını göster.
-                    // _gonderiSayisi, StreamBuilder'dan gelen filtrelenmiş sayıyı yansıtacak.
-                    if(!_sehirlerYukleniyor) // Yüklenmiyorsa sayıyı göster
-                      Text("(${_gonderiSayisi} sonuç)", style: TextStyle(color: Colors.grey[500], fontSize: 11, fontFamily: _fontFamilyBebas)),
-                  ],
-                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  Text(_seciliSehirFiltresi == null ? "Tüm Paylaşımlar" : "'$_seciliSehirFiltresi' Paylaşımları", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 15, fontFamily: _fontFamilyBebas, fontWeight: FontWeight.w500)),
+                  if (!_sehirlerYukleniyor) Text("(${_gonderiSayisi} sonuç)", style: TextStyle(color: Colors.grey[500], fontSize: 11, fontFamily: _fontFamilyBebas)),
+                ]),
               ),
             ),
             _buildSehirFiltreBar(theme),
