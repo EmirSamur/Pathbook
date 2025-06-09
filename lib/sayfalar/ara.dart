@@ -51,6 +51,8 @@ class _AraSayfasiState extends State<AraSayfasi> {
     "En Popülerler": {"alan": "begeniSayisi", "azalan": true},
     "En Eskiler": {"alan": "olusturulmaZamani", "azalan": false},
   };
+
+
   late String _selectedSortKey;
 
   TextEditingController _aramaController = TextEditingController();
@@ -149,6 +151,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
         kategori: _selectedTheme == "Tümü" ? null : _selectedTheme,
         ulke: _selectedCountry == "Tümü" ? null : _selectedCountry,
         sehir: _selectedCity == "Tümü" ? null : _selectedCity,
+
         siralamaAlani: siralamaAyari["alan"] as String,
         azalan: siralamaAyari["azalan"] as bool,
         limitSayisi: _limit,
@@ -236,6 +239,16 @@ class _AraSayfasiState extends State<AraSayfasi> {
       case "tema": if (_selectedTheme != newValue) { _selectedTheme = newValue; veriYenidenYuklensin = true; } break;
       case "siralama": if (_selectedSortKey != newValue) { _selectedSortKey = newValue; veriYenidenYuklensin = true; } break;
       case "ulke":
+        if (_selectedCountry != newValue) {
+          _selectedCountry = newValue;
+          _updateAktifSehirListesi();
+          // Eğer _selectedCity yeni _aktifSehirListesi içinde yoksa, onu "Tümü" yap.
+          // _updateAktifSehirListesi bunu zaten yapıyor.
+          _selectedCity = _aktifSehirListesi.contains(_selectedCity) ? _selectedCity : "Tümü";
+          veriYenidenYuklensin = true;
+        }
+        break;
+      case "ilçe":
         if (_selectedCountry != newValue) {
           _selectedCountry = newValue;
           _updateAktifSehirListesi();

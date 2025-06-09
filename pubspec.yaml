@@ -52,6 +52,7 @@ dependencies:
   intl:
   equatable:
   share_plus:
+  firebase_messaging:
 
 dev_dependencies:
   flutter_test:
