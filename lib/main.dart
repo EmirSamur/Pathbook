@@ -91,7 +91,7 @@ class MyApp extends StatelessWidget {
           inputDecorationTheme: InputDecorationTheme( /* ... (Mevcut InputDecorationTheme ayarların) ... */ ),
           elevatedButtonTheme: ElevatedButtonThemeData( /* ... (Mevcut ElevatedButtonThemeData ayarların) ... */ ),
           textButtonTheme: TextButtonThemeData( /* ... (Mevcut TextButtonThemeData ayarların) ... */ ),
-          cardTheme: CardTheme( /* ... (Mevcut CardTheme ayarların) ... */ ),
+          cardTheme: const CardThemeData(),
           bottomNavigationBarTheme: BottomNavigationBarThemeData( /* ... (Mevcut BottomNavigationBarThemeData ayarların) ... */ ),
         ),
         // home: const Yonlendirme(), // <<<--- ESKİ BAŞLANGIÇ SAYFASI
