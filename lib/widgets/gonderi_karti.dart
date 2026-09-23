@@ -5,6 +5,8 @@ import 'package:pathbooks/modeller/kullanici.dart'; // Kullanici modelinin isVer
 import 'package:provider/provider.dart';
 import 'package:pathbooks/servisler/firestoreseervisi.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:pathbooks/sayfalar/etiket_sayfasi.dart';
+import 'package:pathbooks/widgets/ortak_widgetlar.dart';
 
 class ContentCard extends StatefulWidget {
   final String gonderiId;
@@ -25,6 +27,9 @@ class ContentCard extends StatefulWidget {
   final VoidCallback? onMoreTap;
   final Function(String gonderiId)? onCommentTap;
   final VoidCallback? onDetailsTap;
+  /// Görseller kart içinde kaydırılabilsin mi? Yatay akışta (iç içe yatay
+  /// kaydırma çakışmasın diye) kapalı tutulur.
+  final bool resimKaydirma;
 
   const ContentCard({
     Key? key,
@@ -45,6 +50,7 @@ class ContentCard extends StatefulWidget {
     this.onMoreTap,
     this.onCommentTap,
     this.onDetailsTap,
+    this.resimKaydirma = false,
   }) : super(key: key);
 
   @override
@@ -61,17 +67,17 @@ class _ContentCardState extends State<ContentCard> {
   bool _isLiking = false;
   bool _isBookmarking = false;
   bool _showFullDescription = false;
+  int _aktifResim = 0;
+  final GlobalKey<BegeniKalbiState> _kalpKey = GlobalKey<BegeniKalbiState>();
 
   // Stil sabitleri
   static const double _avatarRadius = 18.0;
   static const double _headerFontSize = 13.8;
-  static const double _verifiedIconSize = 15.0; // Mavi tik ikon boyutu
   static const double _actionIconSize = 22.0;
   static const double _likeCommentFontSize = 12.8;
   static const double _descriptionFontSize = 13.2;
   static const double _metaIconSize = 13.0;
   static const double _metaFontSize = 11.0;
-  static final Color _metaDefaultColor = Colors.grey[600]!;
   static final Color _metaHighlightColor = Colors.redAccent[200]!; // Kategori için vurgu rengi
 
   @override
@@ -147,12 +153,21 @@ class _ContentCardState extends State<ContentCard> {
     }
   }
 
+  void _ciftDokunmaBegeni() {
+    _kalpKey.currentState?.oynat();
+    if (!_isLiked && !_isLiking) _toggleLike();
+  }
+
+  void _etiketeGit(EtiketTuru tur, String deger) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => EtiketSayfasi(tur: tur, deger: deger)));
+  }
+
   Future<void> _checkIfBookmarked() async {
     if (!mounted || widget.gonderiId.isEmpty || widget.aktifKullaniciId.isEmpty) {
       if (mounted) setState(() => _isBookmarked = false); return;
     }
-    // TODO: Firestore'dan kaydetme durumunu çek
-    if (mounted) setState(() => _isBookmarked = false);
+    final bool kayitli = await _firestoreServisi.gonderiKaydedildiMi(aktifKullaniciId: widget.aktifKullaniciId, gonderiId: widget.gonderiId);
+    if (mounted) setState(() => _isBookmarked = kayitli);
   }
 
   Future<void> _toggleBookmark() async {
@@ -163,9 +178,9 @@ class _ContentCardState extends State<ContentCard> {
     final bool newBookmarkState = !_isBookmarked;
     setState(() { _isBookmarking = true; _isBookmarked = newBookmarkState; });
     try {
-      // TODO: Firestore'a kaydetme/kaldırma işlemi
-      await Future.delayed(const Duration(milliseconds: 350));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(newBookmarkState ? "Kaydedildi." : "Kayıt kaldırıldı."), duration: const Duration(seconds: 1)));
+      final bool sonuc = await _firestoreServisi.gonderiKaydetToggle(aktifKullaniciId: widget.aktifKullaniciId, gonderiId: widget.gonderiId);
+      if (mounted && sonuc != newBookmarkState) setState(() => _isBookmarked = sonuc);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(sonuc ? "Kaydedildi." : "Kayıt kaldırıldı."), duration: const Duration(seconds: 1)));
     } catch (e) {
       if (mounted) { setState(() => _isBookmarked = !newBookmarkState);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Kaydetme işlemi hatası.")));}
@@ -199,10 +214,10 @@ class _ContentCardState extends State<ContentCard> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12.0, 10.0, 8.0, 6.0),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: <Widget>[
-        GestureDetector(onTap: widget.onProfileTap, child: CircleAvatar(radius: _avatarRadius, backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.3), backgroundImage: widget.profileUrl.isNotEmpty ? NetworkImage(widget.profileUrl) : null, child: widget.profileUrl.isEmpty ? Icon(Icons.person_rounded, size: _avatarRadius, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7)) : null)),
+        GestureDetector(onTap: widget.onProfileTap, child: KullaniciAvatari(fotoUrl: widget.profileUrl, kullaniciAdi: widget.userName, yaricap: _avatarRadius)),
         const SizedBox(width: 10),
         Expanded(child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Flexible(child: Text(widget.userName, style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: _headerFontSize, letterSpacing: 0.15), overflow: TextOverflow.ellipsis)),
+          Flexible(child: GestureDetector(onTap: widget.onProfileTap, child: Text(widget.userName, style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: _headerFontSize, letterSpacing: 0.15), overflow: TextOverflow.ellipsis))),
           if (widget.yayinlayanKullanici?.isVerified == true) // MAVİ TİK KONTROLÜ
             Padding(padding: const EdgeInsets.only(left: 5.0), child: Icon(Icons.verified_user_rounded, color: Colors.redAccent[200], size: _headerFontSize)), // MAVİ TİK
         ])),
@@ -215,7 +230,14 @@ class _ContentCardState extends State<ContentCard> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 0.0),
       child: Row(children: <Widget>[
-        _buildInteractiveButton(icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: _isLiked ? Colors.redAccent[100] : theme.iconTheme.color?.withOpacity(0.8), onPressed: _isLiking ? null : _toggleLike, tooltip: "Beğen"),
+        IconButton(
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            transitionBuilder: (child, anim) => ScaleTransition(scale: Tween(begin: 0.6, end: 1.0).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutBack)), child: child),
+            child: Icon(_isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded, key: ValueKey(_isLiked), size: _actionIconSize, color: _isLiked ? Colors.redAccent[200] : theme.iconTheme.color?.withOpacity(0.8)),
+          ),
+          onPressed: _isLiking ? null : _toggleLike, splashRadius: _actionIconSize + 6, padding: const EdgeInsets.all(9.0), constraints: const BoxConstraints(), visualDensity: VisualDensity.compact, tooltip: "Beğen",
+        ),
         _buildInteractiveButton(icon: Icons.mode_comment_outlined, onPressed: () => widget.onCommentTap?.call(widget.gonderiId), tooltip: "Yorum Yap"),
         _buildInteractiveButton(icon: Icons.send_outlined, onPressed: _handleShare, tooltip: "Paylaş"),
         const Spacer(),
@@ -287,14 +309,14 @@ class _ContentCardState extends State<ContentCard> {
               spacing: 7.0, runSpacing: 1.0, // runSpacing azaltıldı
               alignment: WrapAlignment.start,
               children: [
-                if (hasCategory) _buildMetaChip(icon: _getCategoryIcon(widget.category!), label: widget.category!, theme: theme, chipColor: _metaHighlightColor, onTap: () { print("Kategori: ${widget.category}"); /* TODO */ }),
-                if (hasUlke) _buildMetaChip(icon: Icons.public_rounded, label: widget.ulke!, theme: theme, onTap: () { print("Ülke: ${widget.ulke}"); /* TODO */ }),
-                if (hasSehir) _buildMetaChip(icon: Icons.location_city_rounded, label: widget.sehir!, theme: theme, onTap: () { print("Şehir: ${widget.sehir}"); /* TODO */ }),
+                if (hasCategory) _buildMetaChip(icon: _getCategoryIcon(widget.category!), label: widget.category!, theme: theme, chipColor: _metaHighlightColor, onTap: () => _etiketeGit(EtiketTuru.kategori, widget.category!)),
+                if (hasUlke) _buildMetaChip(icon: Icons.public_rounded, label: widget.ulke!, theme: theme, onTap: () => _etiketeGit(EtiketTuru.ulke, widget.ulke!)),
+                if (hasSehir) _buildMetaChip(icon: Icons.location_city_rounded, label: widget.sehir!, theme: theme, onTap: () => _etiketeGit(EtiketTuru.sehir, widget.sehir!)),
                 // Genel Konum Etiketi (location): Sadece şehir ve ülke bilgilerinden farklıysa veya onlar yoksa göster.
                 if (hasLocationTag &&
                     !(hasSehir && widget.location!.toLowerCase().contains(widget.sehir!.toLowerCase())) &&
                     !(hasUlke && widget.location!.toLowerCase().contains(widget.ulke!.toLowerCase())))
-                  _buildMetaChip(icon: Icons.push_pin_outlined, label: widget.location!, theme: theme, onTap: () { print("Konum Etiketi: ${widget.location}"); /* TODO */ }),
+                  _buildMetaChip(icon: Icons.push_pin_outlined, label: widget.location!, theme: theme, onTap: () => _etiketeGit(EtiketTuru.konum, widget.location!)),
               ],
             ),
           ),
@@ -331,14 +353,21 @@ class _ContentCardState extends State<ContentCard> {
           _buildCardHeader(theme, textTheme),
           if (anaResimUrl != null)
             GestureDetector(
-              onDoubleTap: _isLiking ? null : _toggleLike, onTap: widget.onDetailsTap,
+              onDoubleTap: _ciftDokunmaBegeni, onTap: widget.onDetailsTap,
               child: AspectRatio(aspectRatio: 1 / 1, child: Stack(fit: StackFit.expand, children: [
-                Image.network(anaResimUrl, fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) => loadingProgress == null ? child : Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.05), child: Center(child: CircularProgressIndicator(strokeWidth: 1.8, valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.6))))),
-                  errorBuilder: (context, error, stackTrace) => Container(color: theme.colorScheme.surfaceVariant.withOpacity(0.1), child: Center(child: Icon(Icons.broken_image_outlined, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.35), size: 35))),
-                ),
+                if (widget.resimKaydirma && widget.resimUrls.length > 1)
+                  PageView.builder(
+                    itemCount: widget.resimUrls.length,
+                    onPageChanged: (i) => setState(() => _aktifResim = i),
+                    itemBuilder: (context, i) => AgGorseli(url: widget.resimUrls[i]),
+                  )
+                else
+                  AgGorseli(url: anaResimUrl),
+                Center(child: BegeniKalbi(key: _kalpKey)),
                 if (widget.resimUrls.length > 1)
-                  Positioned(top: 8.0, right: 8.0, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 3.0), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(12.0)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.photo_library_outlined, color: Colors.white.withOpacity(0.85), size: 10), const SizedBox(width: 3), Text("${widget.resimUrls.length}", style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))]))),
+                  Positioned(top: 8.0, right: 8.0, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7.0, vertical: 3.0), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(12.0)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.photo_library_outlined, color: Colors.white.withOpacity(0.85), size: 11), const SizedBox(width: 3), Text(widget.resimKaydirma ? "${_aktifResim + 1}/${widget.resimUrls.length}" : "${widget.resimUrls.length}", style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold))]))),
+                if (widget.resimKaydirma && widget.resimUrls.length > 1)
+                  Positioned(bottom: 10, left: 0, right: 0, child: Center(child: SayfaNoktalari(adet: widget.resimUrls.length, aktif: _aktifResim))),
               ]),
               ),
             )

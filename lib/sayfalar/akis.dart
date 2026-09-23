@@ -12,6 +12,8 @@ import 'package:pathbooks/widgets/gonderi_karti.dart';
 import 'package:pathbooks/sayfalar/yorumlar_sayfasi.dart';
 import 'package:pathbooks/sayfalar/gonderi_detay_sayfasi.dart';
 import 'package:pathbooks/sayfalar/profil.dart';
+import 'package:pathbooks/widgets/gonderi_secenekleri.dart';
+import 'package:pathbooks/widgets/ortak_widgetlar.dart';
 
 class Akis extends StatefulWidget {
   final int selectedFilter; // 0: Keşfet, 1: Takip Edilenler
@@ -30,6 +32,7 @@ class _AkisState extends State<Akis> {
   bool _isLoadingMore = false;
   bool _hasMore = true;
   DocumentSnapshot? _sonGorunenGonderi;
+  List<String> _engellenenler = [];
   final int _limitPerLoad = 4; // Keşfet için bir seferde yüklenecek gönderi sayısı
   final int _takipEdilenlerLimit = 30; // Takip edilenlerden çekilecek maksimum gönderi
 
@@ -112,6 +115,9 @@ class _AkisState extends State<Akis> {
     });
 
     try {
+      if (initialLoad && _aktifKullaniciId != null) {
+        _engellenenler = await _firestoreServisi.engellenenleriGetir(_aktifKullaniciId!);
+      }
       List<Gonderi> fetchedPosts = [];
       if (widget.selectedFilter == 1) { // Takip Edilenler filtresi
         if (_aktifKullaniciId != null && _aktifKullaniciId!.isNotEmpty) {
@@ -140,13 +146,13 @@ class _AkisState extends State<Akis> {
         if (querySnapshot.docs.isEmpty) {
           if (mounted) setState(() => _hasMore = false);
         } else {
-          for (var doc in querySnapshot.docs) {
-            Kullanici? yayinlayanKullanici;
-            final String? kullaniciId = doc.data()['kullaniciId'] as String?;
-            if (kullaniciId != null && kullaniciId.isNotEmpty) {
-              yayinlayanKullanici = await _firestoreServisi.kullaniciGetir(kullaniciId);
-            }
-            fetchedPosts.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
+          // Yayınlayan kullanıcılar paralel (ve önbellekten) çekilir.
+          final yayinlayanlar = await Future.wait(querySnapshot.docs.map((doc) {
+            final String kullaniciId = doc.data()['kullaniciId'] as String? ?? '';
+            return kullaniciId.isNotEmpty ? _firestoreServisi.kullaniciGetir(kullaniciId) : Future<Kullanici?>.value(null);
+          }));
+          for (int i = 0; i < querySnapshot.docs.length; i++) {
+            fetchedPosts.add(Gonderi.dokumandanUret(querySnapshot.docs[i], yayinlayan: yayinlayanlar[i]));
           }
           if (mounted) {
             if (querySnapshot.docs.isNotEmpty) {
@@ -155,6 +161,7 @@ class _AkisState extends State<Akis> {
             // Gelen gönderi sayısı limitten azsa, daha fazla gönderi kalmamıştır.
             _hasMore = fetchedPosts.length == _limitPerLoad;
           }
+          fetchedPosts.removeWhere((g) => _engellenenler.contains(g.kullaniciId));
         }
         print("Akis: Keşfet için ${fetchedPosts.length} gönderi yüklendi. Daha fazla var mı: $_hasMore");
       }
@@ -222,7 +229,12 @@ class _AkisState extends State<Akis> {
     final ThemeData theme = Theme.of(context);
 
     if (_isLoadingFirstTime && _gonderiler.isEmpty) {
-      return Center(child: CircularProgressIndicator(color: theme.primaryColor.withOpacity(0.85), strokeWidth: 2.5)); // Renk ve kalınlık ayarlandı
+      return Center(
+        child: FractionallySizedBox(
+          widthFactor: _viewportFractionValue,
+          child: ClipRRect(borderRadius: BorderRadius.circular(18), child: const GonderiKartiIskeleti()),
+        ),
+      );
     }
     if (_gonderiler.isEmpty && !_isLoadingFirstTime) {
       return _buildEmptyState(theme);
@@ -273,7 +285,9 @@ class _AkisState extends State<Akis> {
                     horizontal: _cardHorizontalPadding,
                     vertical: 8.0 + (1 - scale) * 25, // Dikey padding ayarlandı
                   ),
-                  child: ContentCard( // gonderi_karti.dart dosyanızdaki widget
+                  // Kart içeriği kadar yer kaplasın ve dikeyde ortalansın
+                  // (eskiden tüm yüksekliği doldurup altta boş alan bırakıyordu).
+                  child: Center(child: SingleChildScrollView(child: ClipRRect(borderRadius: BorderRadius.circular(18), child: ContentCard( // gonderi_karti.dart dosyanızdaki widget
                     key: ValueKey("${gonderi.id}_filter${widget.selectedFilter}_idx${index}_akis"), // Key güncellendi
                     gonderiId: gonderi.id,
                     resimUrls: gonderi.resimUrls,
@@ -297,12 +311,17 @@ class _AkisState extends State<Akis> {
                     },
                     onCommentTap: (gonderiId) => Navigator.push(context, MaterialPageRoute(builder: (_) => YorumlarSayfasi(gonderiId: gonderiId))),
                     onDetailsTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GonderiDetaySayfasi(gonderi: gonderi))),
-                    onMoreTap: () {
-                      // TODO: Daha fazla seçenekler menüsü (raporla, engelle vb.)
-                      print("Akis - Daha Fazla Tıklandı: ${gonderi.id}");
-                    },
-                    // onShareTap: () { ... } // İsteğe bağlı eklenebilir
-                  ),
+                    onMoreTap: () => gonderiSecenekleriniGoster(
+                      context,
+                      gonderi: gonderi,
+                      onSilindi: () => setState(() => _gonderiler.removeWhere((g) => g.id == gonderi.id)),
+                      onGuncellendi: (_) => _refreshPosts(),
+                      onEngellendi: () => setState(() {
+                        _engellenenler.add(gonderi.kullaniciId);
+                        _gonderiler.removeWhere((g) => g.kullaniciId == gonderi.kullaniciId);
+                      }),
+                    ),
+                  )))),
                 ),
               ),
             ),
