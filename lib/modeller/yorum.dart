@@ -8,6 +8,8 @@ class Yorum {
   final String kullaniciId; // Yorumu yapan kullanıcının ID'si
   final String gonderiId;   // Yorumun ait olduğu gönderinin ID'si
   final Timestamp olusturulmaZamani;
+  final String? ustYorumId; // Cevap ise, cevap verilen yorumun ID'si
+  final List<String> begenenler;
 
   // Opsiyonel: Yorumu yapan kullanıcının bilgilerini de burada tutabiliriz
   final Kullanici? yorumuYapanKullanici;
@@ -18,6 +20,8 @@ class Yorum {
     required this.kullaniciId,
     required this.gonderiId,
     required this.olusturulmaZamani,
+    this.ustYorumId,
+    this.begenenler = const [],
     this.yorumuYapanKullanici,
   });
 
@@ -33,6 +37,8 @@ class Yorum {
       kullaniciId: data['kullaniciId'] as String? ?? '',
       gonderiId: data['gonderiId'] as String? ?? '', // Firestore'da bu alan olmayabilir, yorumlar gönderi altında olabilir
       olusturulmaZamani: data['olusturulmaZamani'] as Timestamp? ?? Timestamp.now(),
+      ustYorumId: data['ustYorumId'] as String?,
+      begenenler: List<String>.from(data['begenenler'] as List? ?? const []),
       yorumuYapanKullanici: yapanKullanici,
     );
   }

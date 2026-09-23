@@ -9,7 +9,11 @@ import 'package:pathbooks/servisler/firestoreseervisi.dart';
 import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
 import 'package:intl/intl.dart'; // Tarih formatlama için
 import 'package:intl/date_symbol_data_local.dart'; // Türkçe tarih için
-import 'package:share_plus/share_plus.dart'; // Paylaşma için
+import 'package:pathbooks/sayfalar/etiket_sayfasi.dart';
+import 'package:pathbooks/sayfalar/tam_ekran_resim_sayfasi.dart';
+import 'package:pathbooks/widgets/gonderi_secenekleri.dart';
+import 'package:pathbooks/widgets/ortak_widgetlar.dart';
+import 'package:pathbooks/widgets/takip_butonu.dart';
 
 class GonderiDetaySayfasi extends StatefulWidget {
   final Gonderi gonderi;
@@ -34,6 +38,7 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
   late FirestoreServisi _firestoreServisi;
   int _currentImageIndex = 0;
   final PageController _pageController = PageController(); // Resim galerisi için
+  final GlobalKey<BegeniKalbiState> _kalpKey = GlobalKey<BegeniKalbiState>();
 
   // ContentCard'dan esinlenilen sabitler KALDIRILDI
   // static const double _actionIconSize = 25.0;
@@ -113,34 +118,15 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
     }
   }
 
-  Future<void> _handleShare() async {
-    String shareText = "Pathbook'ta harika bir keşif!\n";
-    if (_yayinlayanKullanici?.kullaniciAdi != null && _yayinlayanKullanici!.kullaniciAdi!.isNotEmpty) {
-      shareText += "${_yayinlayanKullanici!.kullaniciAdi} paylaştı: ";
-    }
-    if (_gonderi.aciklama.isNotEmpty) {
-      shareText += "\"${_gonderi.aciklama.length > 80 ? _gonderi.aciklama.substring(0, 80) + "..." : _gonderi.aciklama}\"\n";
-    }
-    String locationInfo = "";
-    if (_gonderi.konum != null && _gonderi.konum!.isNotEmpty) locationInfo += _gonderi.konum!;
-    if (_gonderi.sehir != null && _gonderi.sehir!.isNotEmpty) {
-      if (locationInfo.isNotEmpty && !locationInfo.toLowerCase().contains(_gonderi.sehir!.toLowerCase())) locationInfo += ", ";
-      if(!locationInfo.toLowerCase().contains(_gonderi.sehir!.toLowerCase())) locationInfo += _gonderi.sehir!;
-    }
-    if (_gonderi.ulke != null && _gonderi.ulke!.isNotEmpty) {
-      if (locationInfo.isNotEmpty && !locationInfo.toLowerCase().contains(_gonderi.ulke!.toLowerCase())) locationInfo += ", ";
-      if(!locationInfo.toLowerCase().contains(_gonderi.ulke!.toLowerCase())) locationInfo += _gonderi.ulke!;
-    }
-    if (locationInfo.isNotEmpty) shareText += "📍 $locationInfo\n";
-
-    shareText += "\nPathbook'u indir ve sen de keşfet!"; // TODO: Uygulama linki eklenebilir
-    try {
-      await Share.share(shareText, subject: "Pathbook'tan Bir Keşif!");
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('İçerik paylaşılamadı.')));
-    }
+  void _ciftDokunmaBegeni() {
+    _kalpKey.currentState?.oynat();
+    if (!_isLiked && !_isLiking) _toggleLike();
   }
 
+  void _etiketeGit(EtiketTuru tur, String? deger) {
+    if (deger == null || deger.trim().isEmpty) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => EtiketSayfasi(tur: tur, deger: deger)));
+  }
 
   Widget _buildMetaInfoRow(IconData icon, String? text, ThemeData theme, {VoidCallback? onTap}) {
     if (text == null || text.isEmpty) return SizedBox.shrink();
@@ -196,6 +182,18 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
         title: Text(appBarTitle, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500)),
         elevation: 0.5,
         backgroundColor: theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_horiz_rounded),
+            onPressed: () => gonderiSecenekleriniGoster(
+              context,
+              gonderi: _gonderi.copyWith(begeniSayisi: _likeCount, yayinlayanKullanici: _yayinlayanKullanici),
+              onSilindi: () => Navigator.pop(context),
+              onEngellendi: () => Navigator.pop(context),
+              onGuncellendi: (yeniAciklama) => setState(() => _gonderi = _gonderi.copyWith(aciklama: yeniAciklama)),
+            ),
+          ),
+        ],
       ),
       body: _kullaniciYukleniyor
           ? Center(child: CircularProgressIndicator(color: theme.primaryColor))
@@ -210,14 +208,10 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                 child: GestureDetector(
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => Profil(aktifKullanici: _yayinlayanKullanici!))),
                   child: Row(children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-                      backgroundImage: (_yayinlayanKullanici!.fotoUrl?.isNotEmpty == true) ? NetworkImage(_yayinlayanKullanici!.fotoUrl!) : null,
-                      child: (_yayinlayanKullanici!.fotoUrl?.isEmpty ?? true) ? Icon(Icons.person_outline_rounded, size: 20, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8)) : null,
-                    ),
+                    KullaniciAvatari(fotoUrl: _yayinlayanKullanici!.fotoUrl, kullaniciAdi: _yayinlayanKullanici!.kullaniciAdi, yaricap: 20),
                     SizedBox(width: 10),
-                    Text(_yayinlayanKullanici!.kullaniciAdi ?? "Bilinmeyen Kullanıcı", style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                    Expanded(child: Text(_yayinlayanKullanici!.kullaniciAdi ?? "Bilinmeyen Kullanıcı", overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: 14.5))),
+                    TakipButonu(hedefKullaniciId: _yayinlayanKullanici!.id),
                   ]),
                 ),
               ),
@@ -237,20 +231,23 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                         if (mounted) setState(() => _currentImageIndex = index);
                       },
                       itemBuilder: (context, index) {
-                        return Image.network(
-                          _gonderi.resimUrls[index],
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) => progress == null ? child : Center(child: CircularProgressIndicator(strokeWidth: 2.0, color: theme.primaryColor)),
-                          errorBuilder: (context, error, stackTrace) => Center(child: Icon(Icons.broken_image_outlined, size: 40, color: Colors.grey[500])),
+                        return GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TamEkranResimSayfasi(resimUrls: _gonderi.resimUrls, baslangicIndex: index))),
+                          onDoubleTap: _ciftDokunmaBegeni,
+                          child: AgGorseli(url: _gonderi.resimUrls[index]),
                         );
                       },
                     ),
                   ),
+                  Positioned.fill(child: Center(child: BegeniKalbi(key: _kalpKey))),
+                  if (_gonderi.resimUrls.length > 1)
+                    Positioned(bottom: 12.0, child: SayfaNoktalari(adet: _gonderi.resimUrls.length, aktif: _currentImageIndex)),
                   if (_gonderi.resimUrls.length > 1)
                     Positioned(
-                      bottom: 12.0,
+                      top: 10.0,
+                      right: 10.0,
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                         decoration: BoxDecoration(color: Colors.black.withOpacity(0.55), borderRadius: BorderRadius.circular(20)),
                         child: Text("${_currentImageIndex + 1} / ${_gonderi.resimUrls.length}", style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w500)),
                       ),
@@ -258,7 +255,7 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                 ],
               )
             else
-              Container(height: 200, color: Colors.grey[200], child: Center(child: Text("Görsel bulunmuyor", style: TextStyle(color: Colors.grey[600])))),
+              Container(height: 200, color: Colors.grey[900], child: Center(child: Text("Görsel bulunmuyor", style: TextStyle(color: Colors.grey[600])))),
 
             // 3. Etkileşim Butonları (KALDIRILDI)
             // Padding(
@@ -288,8 +285,7 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
 
             // Beğeni ve Yorum Sayısı (Biraz yukarı boşluk eklendi, ikonlar kalktığı için)
             SizedBox(height: 8.0), // İkonlar kalktığı için boşluk
-            if (_likeCount > 0 || _gonderi.yorumSayisi > 0)
-              Padding(
+            Padding(
                 padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 8.0), // Üst padding ayarlandı
                 child: Row(
                   children: [
@@ -301,6 +297,13 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                       InkWell(
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => YorumlarSayfasi(gonderiId: _gonderi.id))),
                           child: Text("${_gonderi.yorumSayisi} yorum", style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]))),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => YorumlarSayfasi(gonderiId: _gonderi.id))),
+                      icon: const Icon(Icons.mode_comment_outlined, size: 16),
+                      label: const Text("Yorumlar"),
+                      style: TextButton.styleFrom(foregroundColor: Colors.grey[300], visualDensity: VisualDensity.compact),
+                    ),
                   ],
                 ),
               ),
@@ -323,18 +326,10 @@ class _GonderiDetaySayfasiState extends State<GonderiDetaySayfasi> {
                     spacing: 10.0,
                     runSpacing: 6.0,
                     children: [
-                      _buildMetaInfoRow(Icons.category_outlined, _gonderi.kategori, theme, onTap: () {
-                        print("Kategori tıklandı: ${_gonderi.kategori}");
-                      }),
-                      _buildMetaInfoRow(Icons.public_outlined, _gonderi.ulke, theme, onTap: () {
-                        print("Ülke tıklandı: ${_gonderi.ulke}");
-                      }),
-                      _buildMetaInfoRow(Icons.location_city_outlined, _gonderi.sehir, theme, onTap: () {
-                        print("Şehir tıklandı: ${_gonderi.sehir}");
-                      }),
-                      _buildMetaInfoRow(Icons.pin_drop_outlined, _gonderi.konum, theme, onTap: () {
-                        print("Konum Etiketi tıklandı: ${_gonderi.konum}");
-                      }),
+                      _buildMetaInfoRow(Icons.category_outlined, _gonderi.kategori, theme, onTap: () => _etiketeGit(EtiketTuru.kategori, _gonderi.kategori)),
+                      _buildMetaInfoRow(Icons.public_outlined, _gonderi.ulke, theme, onTap: () => _etiketeGit(EtiketTuru.ulke, _gonderi.ulke)),
+                      _buildMetaInfoRow(Icons.location_city_outlined, _gonderi.sehir, theme, onTap: () => _etiketeGit(EtiketTuru.sehir, _gonderi.sehir)),
+                      _buildMetaInfoRow(Icons.pin_drop_outlined, _gonderi.konum, theme, onTap: () => _etiketeGit(EtiketTuru.konum, _gonderi.konum)),
                     ],
                   ),
                   SizedBox(height: 16),

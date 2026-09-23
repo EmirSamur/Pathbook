@@ -31,6 +31,15 @@ class Gonderi {
     this.yayinlayanKullanici,
   });
 
+  Gonderi copyWith({String? aciklama, int? begeniSayisi, int? yorumSayisi, Kullanici? yayinlayanKullanici}) {
+    return Gonderi(
+      id: id, kullaniciId: kullaniciId, resimUrls: resimUrls, kategori: kategori,
+      aciklama: aciklama ?? this.aciklama, konum: konum, ulke: ulke, sehir: sehir,
+      begeniSayisi: begeniSayisi ?? this.begeniSayisi, yorumSayisi: yorumSayisi ?? this.yorumSayisi,
+      olusturulmaZamani: olusturulmaZamani, yayinlayanKullanici: yayinlayanKullanici ?? this.yayinlayanKullanici,
+    );
+  }
+
   factory Gonderi.dokumandanUret(DocumentSnapshot<Map<String, dynamic>> doc, {Kullanici? yayinlayan}) {
     final data = doc.data(); // DocumentSnapshot'tan veriyi al
 

@@ -1,7 +1,8 @@
 // lib/sayfalar/duyurular_sayfasi.dart
 import 'package:flutter/material.dart';
 import 'package:pathbooks/modeller/oneri_modeli.dart'; // OneriModeli'ni import et
-// import 'package:share_plus/share_plus.dart'; // Paylaşım için (pubspec.yaml'a eklemeyi unutmayın)
+import 'package:share_plus/share_plus.dart';
+import 'package:pathbooks/sayfalar/ara.dart';
 
 class DuyurularSayfasi extends StatelessWidget {
   final OneriModeli secilenOneri;
@@ -13,22 +14,9 @@ class DuyurularSayfasi extends StatelessWidget {
 
   // Paylaşım fonksiyonu (isterseniz ayrı bir service dosyasına taşıyabilirsiniz)
   Future<void> _paylasOneri(BuildContext context) async {
-    final String paylasimMetni =
-        "${secilenOneri.yerAdi}\n\n${secilenOneri.ipucuMetni}\n\nPathBooks ile keşfet!";
-    // Eğer görsel URL'si varsa ve paylaşmak isterseniz, share_plus bunu destekleyebilir
-    // ancak dosya olarak paylaşım daha karmaşık olabilir. Şimdilik metin odaklı.
-    // await Share.share(paylasimMetni, subject: secilenOneri.yerAdi);
-
-    // Basit bir SnackBar ile simüle edelim:
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("'${secilenOneri.yerAdi}' paylaşılıyor... (Özellik yakında!)"),
-        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-      ),
-    );
-    print("Paylaşılacak metin: $paylasimMetni");
+    final String paylasimMetni = "${secilenOneri.yerAdi}\n\n${secilenOneri.ipucuMetni}\n\nPathbook ile keşfet!";
+    await Share.share(paylasimMetni, subject: secilenOneri.yerAdi);
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -182,20 +170,10 @@ class DuyurularSayfasi extends StatelessWidget {
                 ElevatedButton.icon(
                   icon: Icon(Icons.search_outlined),
                   label: Text("${secilenOneri.yerAdi} için Ara"),
-                  onPressed: () {
-                    print("${secilenOneri.yerAdi} için arama yapılacak.");
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("${secilenOneri.yerAdi} için arama özelliği yakında!",
-                          style: textTheme.bodyMedium?.copyWith(color: colorScheme.onInverseSurface),
-                        ),
-                        backgroundColor: colorScheme.inverseSurface, // SnackBar için farklı bir renk
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        margin: EdgeInsets.all(10),
-                      ),
-                    );
-                  },
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => AraSayfasi(baslangicAramasi: secilenOneri.yerAdi)),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,

@@ -11,9 +11,15 @@ import 'package:pathbooks/widgets/gonderi_karti.dart';
 import 'package:pathbooks/servisler/yetkilendirmeservisi.dart';
 import 'package:pathbooks/sayfalar/gonderi_detay_sayfasi.dart';
 import 'package:pathbooks/sayfalar/yorumlar_sayfasi.dart'; // YorumlarSayfasi import edildi
+import 'package:pathbooks/veri/konumlar.dart';
+import 'package:pathbooks/widgets/gonderi_secenekleri.dart';
+import 'package:pathbooks/widgets/ortak_widgetlar.dart';
 
 class AraSayfasi extends StatefulWidget {
-  const AraSayfasi({Key? key}) : super(key: key);
+  /// Başka bir sayfadan (ör. öneri detayı) açıldığında kutuya yazılacak arama.
+  final String? baslangicAramasi;
+
+  const AraSayfasi({Key? key, this.baslangicAramasi}) : super(key: key);
 
   @override
   _AraSayfasiState createState() => _AraSayfasiState();
@@ -28,15 +34,15 @@ class _AraSayfasiState extends State<AraSayfasi> {
   bool _isLoading = true;
   String? _aktifKullaniciId;
 
-  String _selectedTheme = "Doğa";
+  String _selectedTheme = "Tümü";
   final List<String> _temalar = ["Tümü", "Doğa", "Tarih", "Kültür", "Yeme-İçme"];
 
   // YENİ: Ülke ve Şehir Filtreleri için state'ler
   String _selectedCountry = "Tümü";
   List<String> _ulkelerListesi = ["Tümü", "Türkiye", "Almanya", "Fransa", "İtalya", "İspanya", "ABD", "Japonya"]; // Örnek genişletilmiş liste
   String _selectedCity = "Tümü";
-  Map<String, List<String>> _sehirlerMap = {
-    "Türkiye": ["Tümü", "İstanbul", "Ankara", "İzmir", "Antalya", "Bursa", "Adana", "Van", "Trabzon"],
+  final Map<String, List<String>> _sehirlerMap = {
+    "Türkiye": ["Tümü", ...turkiyeIlleri],
     "Almanya": ["Tümü", "Berlin", "Münih", "Hamburg", "Frankfurt", "Köln"],
     "Fransa": ["Tümü", "Paris", "Marsilya", "Lyon", "Nice", "Strazburg"],
     "İtalya": ["Tümü", "Roma", "Milano", "Venedik", "Floransa", "Napoli"],
@@ -64,6 +70,8 @@ class _AraSayfasiState extends State<AraSayfasi> {
   bool _hepsiYuklendi = false;
   final ScrollController _scrollController = ScrollController();
   final int _limit = 7; // Sayfalama için gönderi limiti
+  List<String> _engellenenler = [];
+  List<Kullanici> _bulunanKullanicilar = [];
 
   @override
   void initState() {
@@ -74,10 +82,32 @@ class _AraSayfasiState extends State<AraSayfasi> {
     _selectedSortKey = _sortOptions.keys.first;
     _updateAktifSehirListesi();
 
+    if (widget.baslangicAramasi != null && widget.baslangicAramasi!.trim().isNotEmpty) {
+      _aramaController.text = widget.baslangicAramasi!.trim();
+      _aramaSorgusu = _aramaController.text;
+      _kullanicilariAra(_aramaSorgusu);
+    }
     _aramaController.addListener(_onAramaDegisti);
     _scrollController.addListener(_onScroll);
 
+    _engellenenleriYukleVeBasla();
+  }
+
+  Future<void> _engellenenleriYukleVeBasla() async {
+    if (_aktifKullaniciId != null) {
+      _engellenenler = await _firestoreServisi.engellenenleriGetir(_aktifKullaniciId!);
+    }
     _gonderileriYukle(ilkYukleme: true);
+  }
+
+  Future<void> _kullanicilariAra(String sorgu) async {
+    if (sorgu.length < 2) {
+      if (mounted) setState(() => _bulunanKullanicilar = []);
+      return;
+    }
+    final sonuc = await _firestoreServisi.kullaniciAra(sorgu);
+    if (!mounted || _aramaSorgusu != sorgu) return; // Bu arada sorgu değiştiyse eski sonucu gösterme
+    setState(() => _bulunanKullanicilar = sonuc.where((k) => !_engellenenler.contains(k.id)).toList());
   }
 
   @override
@@ -103,6 +133,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
         // Firestore'dan veri zaten çekilmiş olduğu için bu daha hızlı olacaktır.
         // Eğer her arama için Firestore'a gitmek isterseniz _gonderileriYukle(ilkYukleme: true) çağrılmalı.
         _uygulaIstemciTarafiFiltrelemeVeArama();
+        _kullanicilariAra(yeniAramaSorgusu);
       }
     });
   }
@@ -163,7 +194,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
 
       if (mounted) {
         setState(() {
-          _tumGonderilerFiltresiz.addAll(gelenGonderiler);
+          _tumGonderilerFiltresiz.addAll(gelenGonderiler.where((g) => !_engellenenler.contains(g.kullaniciId)));
           _sonGorunenGonderiDoc = yeniSonDoc;
           _hepsiYuklendi = gelenGonderiler.length < _limit || yeniSonDoc == null;
           _uygulaIstemciTarafiFiltrelemeVeArama();
@@ -323,9 +354,41 @@ class _AraSayfasiState extends State<AraSayfasi> {
     );
   }
 
+  Widget _buildKullaniciSonuclari(ThemeData theme) {
+    return Container(
+      height: 96,
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: theme.dividerColor.withOpacity(0.4), width: 0.5))),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: _bulunanKullanicilar.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, i) {
+          final k = _bulunanKullanicilar[i];
+          return GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => Profil(aktifKullanici: k))),
+            child: SizedBox(
+              width: 64,
+              child: Column(children: [
+                KullaniciAvatari(fotoUrl: k.fotoUrl, kullaniciAdi: k.kullaniciAdi, yaricap: 26),
+                const SizedBox(height: 6),
+                Text(k.kullaniciAdi ?? "", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildGonderiListesi(ThemeData theme) {
     if (_isLoading && _filtrelenmisVeAranmisGonderiler.isEmpty) {
-      return Center(child: Padding(padding: const EdgeInsets.all(20.0), child: CircularProgressIndicator(color: theme.colorScheme.primary)));
+      return ListView.separated(
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 2,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, __) => const GonderiKartiIskeleti(),
+      );
     }
     if (_filtrelenmisVeAranmisGonderiler.isEmpty && !_isLoading) {
       String mesaj = "$_selectedTheme temasında gönderi bulunamadı.";
@@ -372,6 +435,19 @@ class _AraSayfasiState extends State<AraSayfasi> {
           initialLikeCount: gonderi.begeniSayisi,
           initialCommentCount: gonderi.yorumSayisi,
           aktifKullaniciId: _aktifKullaniciId ?? "",
+          yayinlayanKullanici: gonderi.yayinlayanKullanici,
+          resimKaydirma: true,
+          onMoreTap: () => gonderiSecenekleriniGoster(
+            context,
+            gonderi: gonderi,
+            onSilindi: () => _gonderileriYukle(ilkYukleme: true),
+            onGuncellendi: (_) => _gonderileriYukle(ilkYukleme: true),
+            onEngellendi: () {
+              _engellenenler.add(gonderi.kullaniciId);
+              _tumGonderilerFiltresiz.removeWhere((g) => g.kullaniciId == gonderi.kullaniciId);
+              _uygulaIstemciTarafiFiltrelemeVeArama();
+            },
+          ),
           onProfileTap: () {
             if (gonderi.yayinlayanKullanici != null) {
               Navigator.push(context, MaterialPageRoute(builder: (context) => Profil(aktifKullanici: gonderi.yayinlayanKullanici!)));
@@ -394,7 +470,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: widget.baslangicAramasi != null,
         backgroundColor: theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor,
         elevation: 0.3, // Hafif bir elevation
         titleSpacing: 0,
@@ -406,7 +482,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
               controller: _aramaController,
               style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 14.5), // Font boyutu
               decoration: InputDecoration(
-                hintText: "Açıklama, kategori, konum, şehir, ülke...", // Hint güncellendi
+                hintText: "Kullanıcı, açıklama, konum, şehir, ülke...",
                 hintStyle: TextStyle(color: (theme.textTheme.bodyLarge?.color)?.withOpacity(0.5), fontSize: 14.5),
                 prefixIcon: Icon(Icons.search_rounded, color: (theme.textTheme.bodyLarge?.color)?.withOpacity(0.65), size: 19), // İkon boyutu
                 suffixIcon: _aramaController.text.isNotEmpty
@@ -432,6 +508,7 @@ class _AraSayfasiState extends State<AraSayfasi> {
       body: Column(
         children: [
           _buildFiltreBar(theme),
+          if (_bulunanKullanicilar.isNotEmpty) _buildKullaniciSonuclari(theme),
           Expanded(child: _buildGonderiListesi(theme)),
         ],
       ),

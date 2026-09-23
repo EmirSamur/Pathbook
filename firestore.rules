@@ -1,0 +1,94 @@
+rules_version = '2';
+
+// Pathbook Firestore güvenlik kuralları.
+// Firebase Console > Firestore Database > Rules sekmesine yapıştırıp "Publish"
+// deyin ya da `firebase deploy --only firestore:rules` ile yükleyin.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function girisYapti() {
+      return request.auth != null;
+    }
+
+    function benim(uid) {
+      return girisYapti() && request.auth.uid == uid;
+    }
+
+    // Güncellemede yalnızca verilen alanlar değişiyor mu?
+    function sadeceBuAlanlar(alanlar) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(alanlar);
+    }
+
+    // ---------------- KULLANICILAR ----------------
+    match /kullanicilar/{uid} {
+      allow read: if girisYapti();
+
+      // Kullanıcı kendi belgesini oluşturur; kendine doğrulanmış rozeti veremez.
+      allow create: if benim(uid)
+        && (!('isVerified' in request.resource.data) || request.resource.data.isVerified == false);
+
+      // Kendi belgesini günceller (isVerified hariç).
+      // Başkaları yalnızca takipçi listesi/sayısını değiştirebilir (takip et / bırak).
+      allow update: if (benim(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isVerified']))
+        || (girisYapti() && sadeceBuAlanlar(['takipciler', 'takipciSayisi']));
+
+      allow delete: if false;
+
+      // Kaydedilen gönderiler: yalnızca sahibi görür ve değiştirir.
+      match /kaydedilenler/{gonderiId} {
+        allow read, write: if benim(uid);
+      }
+
+      // Bildirimler: sahibi okur/okundu yapar/siler; başkası adına bildirim yazılamaz.
+      match /bildirimler/{bildirimId} {
+        allow read, update, delete: if benim(uid);
+        allow create: if girisYapti() && request.resource.data.yapanId == request.auth.uid;
+      }
+    }
+
+    // ---------------- GÖNDERİLER ----------------
+    match /gonderiler/{gonderiId} {
+      allow read: if girisYapti();
+      allow create: if girisYapti() && request.resource.data.kullaniciId == request.auth.uid;
+
+      // Sahibi her şeyi günceller; diğerleri sadece beğeni/yorum sayaçlarını.
+      allow update: if (girisYapti() && resource.data.kullaniciId == request.auth.uid)
+        || (girisYapti() && sadeceBuAlanlar(['begeniSayisi', 'yorumSayisi']));
+      allow delete: if girisYapti() && resource.data.kullaniciId == request.auth.uid;
+
+      match /begenenKullanicilar/{begenenId} {
+        allow read: if girisYapti();
+        allow write: if benim(begenenId);
+      }
+
+      match /yorumlar/{yorumId} {
+        allow read: if girisYapti();
+        allow create: if girisYapti() && request.resource.data.kullaniciId == request.auth.uid;
+        // Yorum sahibi düzenler; diğerleri yalnızca beğenir.
+        allow update: if (girisYapti() && resource.data.kullaniciId == request.auth.uid)
+          || (girisYapti() && sadeceBuAlanlar(['begenenler', 'begeniSayisi']));
+        // Yorumu, yorum sahibi veya gönderi sahibi silebilir.
+        allow delete: if girisYapti() && (resource.data.kullaniciId == request.auth.uid
+          || get(/databases/$(database)/documents/gonderiler/$(gonderiId)).data.kullaniciId == request.auth.uid);
+      }
+    }
+
+    // ---------------- ŞİKAYETLER ----------------
+    // Kullanıcılar şikayet oluşturabilir ama okuyamaz (Console'dan incelenir).
+    match /sikayetler/{sikayetId} {
+      allow create: if girisYapti() && request.resource.data.sikayetEdenId == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    // ---------------- ÖNERİLER & DOSYALAR ----------------
+    // İçerik Firebase Console'dan eklenir; uygulama sadece okur.
+    match /oneriler/{docId} {
+      allow read: if girisYapti();
+      allow write: if false;
+    }
+    match /dosyalar/{docId} {
+      allow read: if girisYapti();
+      allow write: if false;
+    }
+  }
+}
