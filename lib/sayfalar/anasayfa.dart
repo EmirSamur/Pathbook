@@ -12,6 +12,7 @@ import 'package:pathbooks/sayfalar/akis.dart';
 import 'package:pathbooks/sayfalar/ara.dart';
 import 'package:pathbooks/sayfalar/duyurular.dart';
 import 'package:pathbooks/sayfalar/gelen_kutusu_sayfasi.dart';
+import 'package:pathbooks/widgets/ortak_widgetlar.dart';
 
 class Anasayfa extends StatefulWidget {
   final Kullanici aktifKullanici;
@@ -37,6 +38,8 @@ class _AnasayfaState extends State<Anasayfa> {
   OneriModeli? _sonGosterilenDuyuruKutusuOnerisi;
   final Random _random = Random();
   Timer? _duyuruTimer;
+  Timer? _okunduTimer;
+  late final Stream<int> _okunmamisSayisi;
 
   @override
   void initState() {
@@ -46,6 +49,7 @@ class _AnasayfaState extends State<Anasayfa> {
         ? widget.aktifKullanici.fotoUrl
         : null;
     _firestoreServisi = Provider.of<FirestoreServisi>(context, listen: false);
+    _okunmamisSayisi = _firestoreServisi.okunmamisBildirimSayisi(widget.aktifKullanici.id);
     _fetchSuggestionWhenNeeded();
   }
 
@@ -91,6 +95,7 @@ class _AnasayfaState extends State<Anasayfa> {
   void dispose() {
     _sayfaKumandasiAnasayfa?.dispose();
     _duyuruTimer?.cancel();
+    _okunduTimer?.cancel();
     super.dispose();
   }
 
@@ -360,6 +365,12 @@ class _AnasayfaState extends State<Anasayfa> {
                         _aktifSayfaNo = acilanSayfaNo;
                       });
                       _fetchSuggestionWhenNeeded(); // Sayfa değiştiğinde öneri mantığını çalıştır
+                      // Gelen kutusu açıldıktan kısa süre sonra bildirimleri okundu say
+                      // (yeni olanlar önce vurgulu görünsün).
+                      _okunduTimer?.cancel();
+                      if (acilanSayfaNo == 3) {
+                        _okunduTimer = Timer(const Duration(seconds: 2), () => _firestoreServisi.bildirimleriOkunduYap(widget.aktifKullanici.id));
+                      }
                     }
                   },
                   children: _sayfalar,
@@ -399,7 +410,28 @@ class _AnasayfaState extends State<Anasayfa> {
             _buildNavBarItem(iconData: Icons.public, activeIconData: Icons.public, label: 'Ana Sayfa', index: 0, theme: theme),
             _buildNavBarItem(iconData: Icons.search_rounded, activeIconData: Icons.travel_explore, label: 'Ara', index: 1, theme: theme, iconSize: 24),
             _buildNavBarItem(iconData:Icons.camera_alt_outlined, activeIconData: Icons.camera_alt_outlined, label: 'Yükle', index: 2, theme: theme, iconSize: 28, isSpecial: true, specialColor: Colors.redAccent[400]),
-            _buildNavBarItem(iconData: Icons.notifications_none_rounded, activeIconData: Icons.notifications_active_rounded, label: 'Öneriler', index: 3, theme: theme),
+            BottomNavigationBarItem(
+              icon: StreamBuilder<int>(
+                stream: _okunmamisSayisi,
+                builder: (context, snapshot) {
+                  final int sayi = snapshot.data ?? 0;
+                  final bool secili = _aktifSayfaNo == 3;
+                  return Badge(
+                    isLabelVisible: sayi > 0,
+                    label: Text(sayi > 9 ? "9+" : "$sayi"),
+                    backgroundColor: Colors.redAccent[400],
+                    child: Icon(
+                      secili ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+                      size: secili ? 26 : 23,
+                      color: secili
+                          ? (theme.bottomNavigationBarTheme.selectedItemColor ?? theme.colorScheme.primary)
+                          : (theme.bottomNavigationBarTheme.unselectedItemColor ?? Colors.grey[500]!),
+                    ),
+                  );
+                },
+              ),
+              label: 'Bildirimler',
+            ),
             BottomNavigationBarItem(
                 icon: _buildProfileIconForNavBar(isSelected: _aktifSayfaNo == 4, profileImageUrl: _aktifKullaniciProfilFotoUrl, theme: theme),
                 label: 'Profil'
@@ -438,14 +470,7 @@ class _AnasayfaState extends State<Anasayfa> {
           shape: BoxShape.circle,
           border: Border.all(color: borderColor.withOpacity(isSelected ? 1.0 : 0.55), width: isSelected ? 2.0 : 1.4)
       ),
-      child: CircleAvatar(
-        radius: avatarRadius,
-        backgroundImage: (profileImageUrl != null && profileImageUrl.isNotEmpty) ? NetworkImage(profileImageUrl) : null,
-        backgroundColor: theme.colorScheme.surface.withOpacity(0.75),
-        child: (profileImageUrl == null || profileImageUrl.isEmpty)
-            ? Icon(Icons.person_outline_rounded, size: avatarRadius + 4, color: theme.iconTheme.color?.withOpacity(0.65))
-            : null,
-      ),
+      child: KullaniciAvatari(fotoUrl: profileImageUrl, kullaniciAdi: widget.aktifKullanici.kullaniciAdi, yaricap: avatarRadius),
     );
   }
 }

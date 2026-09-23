@@ -1,0 +1,179 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "kullaniciId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "kullaniciId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sehir",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "kategori",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ulke",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sehir",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "konum",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ulke",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sehir",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "kategori",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ulke",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "kategori",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ulke",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sehir",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "olusturulmaZamani",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "kategori",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "begeniSayisi",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gonderiler",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ulke",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "begeniSayisi",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

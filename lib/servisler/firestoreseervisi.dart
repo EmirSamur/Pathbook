@@ -55,11 +55,7 @@ class FirestoreServisi {
   final Map<String, Future<Kullanici?>> _kullaniciOnbellegi = {};
 
   Future<Kullanici?> kullaniciGetir(String id, {bool onbellekKullan = true}) {
-    if (!onbellekKullan) {
-      final Future<Kullanici?> taze = _kullaniciGetirSunucudan(id);
-      _kullaniciOnbellegi[id] = taze;
-      return taze;
-    }
+    if (!onbellekKullan) _kullaniciOnbellegi.remove(id);
     return _kullaniciOnbellegi.putIfAbsent(id, () => _kullaniciGetirSunucudan(id).then((k) {
       if (k == null) _kullaniciOnbellegi.remove(id); // Hata/boş sonucu önbellekte tutma
       return k;
@@ -262,11 +258,14 @@ class FirestoreServisi {
       QuerySnapshot<Map<String, dynamic>> snapshot = await sorgu.get();
       List<Gonderi> gonderilerListesi = [];
       DocumentSnapshot? enSonCekilenDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-      for (var doc in snapshot.docs) {
-        Kullanici? yayinlayanKullanici;
-        final String? kullaniciId = doc.data()['kullaniciId'] as String?;
-        if (kullaniciId != null && kullaniciId.isNotEmpty) yayinlayanKullanici = await kullaniciGetir(kullaniciId);
-        Gonderi gonderi = Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici);
+      // Yayınlayanları sırayla değil, paralel olarak (ve önbellekten) çek.
+      final yayinlayanlar = await Future.wait(snapshot.docs.map((doc) {
+        final String kullaniciId = doc.data()['kullaniciId'] as String? ?? '';
+        return kullaniciId.isNotEmpty ? kullaniciGetir(kullaniciId) : Future<Kullanici?>.value(null);
+      }));
+      for (int i = 0; i < snapshot.docs.length; i++) {
+        final doc = snapshot.docs[i];
+        Gonderi gonderi = Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanlar[i]);
         if (aramaMetni != null && aramaMetni.trim().isNotEmpty) {
           final String aramaLower = aramaMetni.trim().toLowerCase();
           bool eslesme = (gonderi.aciklama.toLowerCase().contains(aramaLower)) || (gonderi.kategori.toLowerCase().contains(aramaLower)) || (gonderi.konum?.toLowerCase().contains(aramaLower) ?? false) || (gonderi.ulke?.toLowerCase().contains(aramaLower) ?? false) || (gonderi.sehir?.toLowerCase().contains(aramaLower) ?? false) || (gonderi.yayinlayanKullanici?.kullaniciAdi?.toLowerCase().contains(aramaLower) ?? false);
@@ -397,14 +396,13 @@ class FirestoreServisi {
       List<String> sorgulanacakIdler = takipEdilenIdListesi.take(30).toList();
       if (sorgulanacakIdler.isEmpty) return [];
       QuerySnapshot<Map<String, dynamic>> querySnapshot = await _firestore.collection(_gonderilerKoleksiyonu).where('kullaniciId', whereIn: sorgulanacakIdler).orderBy('olusturulmaZamani', descending: true).limit(limit).get();
-      List<Gonderi> gonderiler = [];
-      for (var doc in querySnapshot.docs) {
-        Kullanici? yayinlayanKullanici;
-        final String? kullaniciId = doc.data()['kullaniciId'] as String?;
-        if (kullaniciId != null && kullaniciId.isNotEmpty) yayinlayanKullanici = await kullaniciGetir(kullaniciId);
-        gonderiler.add(Gonderi.dokumandanUret(doc, yayinlayan: yayinlayanKullanici));
-      }
-      return gonderiler;
+      final yayinlayanlar = await Future.wait(querySnapshot.docs.map((doc) {
+        final String kullaniciId = doc.data()['kullaniciId'] as String? ?? '';
+        return kullaniciId.isNotEmpty ? kullaniciGetir(kullaniciId) : Future<Kullanici?>.value(null);
+      }));
+      return [
+        for (int i = 0; i < querySnapshot.docs.length; i++) Gonderi.dokumandanUret(querySnapshot.docs[i], yayinlayan: yayinlayanlar[i]),
+      ];
     } catch (e, s) {
       print("HATA (takipEdilenlerinGonderileriniGetir): $e \n$s");
       return [];
